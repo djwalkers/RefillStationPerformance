@@ -38,35 +38,38 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
     st.subheader("Merged Data (Performance + Resource Identity Mapping)")
     st.write(merged_data)
 
+    # Exclude rows where any of the key metrics have 0 values
+    filtered_data = merged_data[
+        (merged_data['Drawers Counted'] > 0) & 
+        (merged_data['Rogues Processed'] > 0) & 
+        (merged_data['Damaged Drawers Processed'] > 0) & 
+        (merged_data['Damaged Products Processed'] > 0)
+    ]
+
     # Interactive filters
     st.sidebar.header("Filters")
     
     # Username filter
     username_filter = st.sidebar.multiselect(
-        "Select Username(s)", merged_data['Username'].unique(), default=merged_data['Username'].unique())
+        "Select Username(s)", filtered_data['Username'].unique(), default=filtered_data['Username'].unique())
     
     # Drawers Counted filter (range slider)
-    drawers_min = merged_data['Drawers Counted'].min()
-    drawers_max = merged_data['Drawers Counted'].max()
+    drawers_min = filtered_data['Drawers Counted'].min()
+    drawers_max = filtered_data['Drawers Counted'].max()
     drawers_filter = st.sidebar.slider(
         "Select Drawers Counted Range", min_value=drawers_min, max_value=drawers_max, 
         value=(drawers_min, drawers_max))
 
     # Apply the filters
-    filtered_data = merged_data[
-        (merged_data['Username'].isin(username_filter)) & 
-        (merged_data['Drawers Counted'] >= drawers_filter[0]) & 
-        (merged_data['Drawers Counted'] <= drawers_filter[1])
-    ]
-
-    # Exclude rows where "Drawers Counted" is 0 for Top/Bottom charts
-    filtered_data_for_top_bottom = filtered_data[
-        (filtered_data['Drawers Counted'] > 0)
+    filtered_data = filtered_data[
+        (filtered_data['Username'].isin(username_filter)) & 
+        (filtered_data['Drawers Counted'] >= drawers_filter[0]) & 
+        (filtered_data['Drawers Counted'] <= drawers_filter[1])
     ]
 
     # Top 10 and Bottom 10 Drawers Counted by Username (excluding 0s)
-    top_10_by_username = filtered_data_for_top_bottom.groupby('Username')['Drawers Counted'].sum().sort_values(ascending=False).head(10)
-    bottom_10_by_username = filtered_data_for_top_bottom.groupby('Username')['Drawers Counted'].sum().sort_values().head(10)
+    top_10_by_username = filtered_data.groupby('Username')['Drawers Counted'].sum().sort_values(ascending=False).head(10)
+    bottom_10_by_username = filtered_data.groupby('Username')['Drawers Counted'].sum().sort_values().head(10)
 
     # Plotting the Top 10 and Bottom 10 charts based on "Drawers Counted"
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
