@@ -1,3 +1,4 @@
+
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -15,42 +16,35 @@ if uploaded_file is not None:
 
     # Rename columns to more meaningful names
     data.columns = [
-        'Station', 'Operator', 'TimeSpent', 'QtyRefilled', 'CostPerUnit', 
-        'TotalCost', 'Efficiency', 'Downtime', 'Maintenance', 'BatchSize', 
-        'Duration', 'NumRefills', 'AvgDuration', 'MaxDuration', 'OtherMetric1', 
-        'OtherMetric2', 'OtherMetric3', 'OtherMetric4'
+        'Resource Identity', 'Username', 'User Active', 'Drawers Counted', 
+        'Drawers Counted Per Hour', 'Drawers Refilled', 'Drawers Refilled Per Hour', 
+        'Damaged Drawers Processed', 'Damaged Products Processed', 'Rogues Processed', 
+        'Total Time Station Active', 'Total Drawers Counted', 'Total Drawers Counted Per Hour', 
+        'Total Drawers Refilled', 'Total Drawers Refilled Per Hour', 'Total Damaged Drawers Processed', 
+        'Total Damaged Products Processed', 'Total Rogues Processed'
     ]
 
-    # Filter by Station
-    station = st.selectbox('Select a Station:', data['Station'].unique())
+    # Filter Top 10 and Bottom 10
+    top_10_by_username = data.groupby('Username').sum().sort_values(by='Drawers Counted', ascending=False).head(10)
+    filtered_bottom_10 = data[data['Drawers Counted'] > 0].groupby('Username').sum().sort_values(by='Drawers Counted').head(10)
 
-    # Filter by Time Spent (hrs)
-    time_spent_min = float(data['TimeSpent'].min().split()[0])
-    time_spent_max = float(data['TimeSpent'].max().split()[0])
+    # Plotting the Top 10 and Bottom 10 charts based on "Username"
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
-    time_spent = st.slider('Select Time Spent Range (hrs)', 
-                           min_value=time_spent_min, 
-                           max_value=time_spent_max, 
-                           value=(time_spent_min, time_spent_max))
+    # Plot Top 10 "Drawers Counted" by Username
+    top_10_by_username.plot(kind='bar', y='Drawers Counted', ax=ax1, color='green')
+    ax1.set_title('Top 10 Drawers Counted by Username')
+    ax1.set_xlabel('Username')
+    ax1.set_ylabel('Drawers Counted')
 
-    # Apply filters based on user input
-    filtered_data = data[(data['Station'] == station) & 
-                         (data['TimeSpent'].apply(lambda x: float(x.split()[0])) >= time_spent[0]) & 
-                         (data['TimeSpent'].apply(lambda x: float(x.split()[0])) <= time_spent[1])]
+    # Plot Bottom 10 "Drawers Counted" by Username excluding 0 values
+    filtered_bottom_10.plot(kind='bar', y='Drawers Counted', ax=ax2, color='red')
+    ax2.set_title('Bottom 10 Drawers Counted by Username (Excluding 0)')
+    ax2.set_xlabel('Username')
+    ax2.set_ylabel('Drawers Counted')
 
-    # Display filtered data
-    st.write(filtered_data)
-
-    # Create a bar chart of Quantity Refilled per Station
-    st.subheader('Total Quantity Refilled per Station')
-
-    filtered_data_grouped = filtered_data.groupby('Station')['QtyRefilled'].sum()
-    fig, ax = plt.subplots()
-    filtered_data_grouped.plot(kind='bar', ax=ax, figsize=(10, 6))
-    ax.set_title('Total Quantity Refilled per Station')
-    ax.set_xlabel('Station')
-    ax.set_ylabel('Total Quantity Refilled')
+    # Display the plots
+    plt.tight_layout()
     st.pyplot(fig)
-
 else:
     st.write("Please upload a CSV file to get started.")
