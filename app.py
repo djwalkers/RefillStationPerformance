@@ -5,53 +5,10 @@ import matplotlib.pyplot as plt
 # Streamlit app title
 st.title('Refill Station Performance Dashboard')
 
-# File uploader
+# File uploader outside any conditional block
 uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-if uploaded_file is not None:
-    # Read the uploaded CSV file
-    data = pd.read_csv(uploaded_file)
-
-    # Rename columns to more meaningful names
-    data.columns = [
-        'Resource Identity', 'Username', 'User Active', 'Drawers Counted', 
-        'Drawers Counted Per Hour', 'Drawers Refilled', 'Drawers Refilled Per Hour', 
-        'Damaged Drawers Processed', 'Damaged Products Processed', 'Rogues Processed', 
-        'Total Time Station Active', 'Total Drawers Counted', 'Total Drawers Counted Per Hour', 
-        'Total Drawers Refilled', 'Total Drawers Refilled Per Hour', 'Total Damaged Drawers Processed', 
-        'Total Damaged Products Processed', 'Total Rogues Processed'
-    ]
-
-    # Interactive filters
-    st.sidebar.header("Filters")
-    
-    # Username filter
-    username_filter = st.sidebar.multiselect(
-        "Select Username(s)", data['Username'].unique(), default=data['Username'].unique())
-    
-    # Drawers Counted filter (range slider)
-    drawers_min = data['Drawers Counted'].min()
-    drawers_max = data['Drawers Counted'].max()
-    drawers_filter = st.sidebar.slider(
-        "Select Drawers Counted Range", min_value=drawers_min, max_value=drawers_max, 
-        value=(drawers_min, drawers_max))
-
-    # Total Time Station Active filter (you can use a range slider)
-    time_filter = st.sidebar.slider(
-        "Select Time Range (in hrs)", 
-        min_value=0, 
-        max_value=24, 
-        value=(0, 24))
-import pandas as pd
-import streamlit as st
-import matplotlib.pyplot as plt
-
-# Streamlit app title
-st.title('Refill Station Performance Dashboard')
-
-# File uploader
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
-
+# Only proceed if the file is uploaded
 if uploaded_file is not None:
     # Read the uploaded CSV file
     data = pd.read_csv(uploaded_file)
