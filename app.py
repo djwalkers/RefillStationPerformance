@@ -14,10 +14,14 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
     data = pd.read_csv(uploaded_file_1)
 
     # Load the second dataset (Excel file with Resource Identity mapping)
-    mapping_data = pd.read_excel(uploaded_file_2, usecols=[0])  # Read only column A (Resource Identity)
+    mapping_data = pd.read_excel(uploaded_file_2, usecols=[0, 1])  # Read columns A (Resource Identity) and B (Name)
     mapping_data.columns = ['Resource Identity', 'Resource Name']  # Rename columns for clarity
-    
-    # Rename columns in the first dataset
+
+    # Display the mapping data for verification
+    st.subheader("Excel Data Preview (Resource Identity Mapping)")
+    st.write(mapping_data.head())
+
+    # Rename columns in the first dataset (performance data)
     data.columns = [
         'Resource Identity', 'Username', 'User Active', 'Drawers Counted', 
         'Drawers Counted Per Hour', 'Drawers Refilled', 'Drawers Refilled Per Hour', 
@@ -100,4 +104,3 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
 
 else:
     st.write("Please upload both CSV and Excel files to get started.")
-
