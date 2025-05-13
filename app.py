@@ -5,10 +5,9 @@ import matplotlib.pyplot as plt
 # Streamlit app title
 st.title('Refill Station Performance Dashboard')
 
-# File uploader outside any conditional block
+# File uploader
 uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
 
-# Only proceed if the file is uploaded
 if uploaded_file is not None:
     # Read the uploaded CSV file
     data = pd.read_csv(uploaded_file)
@@ -37,20 +36,11 @@ if uploaded_file is not None:
         "Select Drawers Counted Range", min_value=drawers_min, max_value=drawers_max, 
         value=(drawers_min, drawers_max))
 
-    # Time filter (Total Time Station Active)
-    time_filter = st.sidebar.slider(
-        "Select Time Range (in hrs)", 
-        min_value=0, 
-        max_value=24, 
-        value=(0, 24))
-
     # Apply the filters
     filtered_data = data[
         (data['Username'].isin(username_filter)) & 
         (data['Drawers Counted'] >= drawers_filter[0]) & 
-        (data['Drawers Counted'] <= drawers_filter[1]) & 
-        (data['Total Time Station Active'].apply(lambda x: float(x.split()[0])) >= time_filter[0]) &
-        (data['Total Time Station Active'].apply(lambda x: float(x.split()[0])) <= time_filter[1])
+        (data['Drawers Counted'] <= drawers_filter[1])
     ]
 
     # Exclude rows where any of the metrics have 0 values
@@ -61,28 +51,31 @@ if uploaded_file is not None:
         (filtered_data['Damaged Products Processed'] > 0)
     ]
 
-    # Display the filtered data
-    st.subheader("Filtered Data")
-    st.write(filtered_data)
-
-    # Additional analysis - Summary statistics
-    st.subheader("Summary Statistics")
-    st.write(filtered_data.describe())
-
     # Generating the requested charts for metrics by Username
     metrics = ['Drawers Counted', 'Rogues Processed', 'Damaged Drawers Processed', 'Damaged Products Processed']
     
-    for metric in metrics:
-        # Grouping the data by Username and summing the metric values
-        metric_by_username = filtered_data.groupby('Username')[metric].sum().sort_values(ascending=False)
-        
-        # Plotting the data
-        fig, ax = plt.subplots(figsize=(10, 6))
-        metric_by_username.plot(kind='bar', ax=ax, color='skyblue')
-        ax.set_title(f'{metric} by Username')
-        ax.set_xlabel('Username')
-        ax.set_ylabel(metric)
-        st.pyplot(fig)
+    # Top 10 and Bottom 10 Drawers Counted by Username
+    top_10_by_username = filtered_data.groupby('Username')['Drawers Counted'].sum().sort_values(ascending=False).head(10)
+    bottom_10_by_username = filtered_data[filtered_data['Drawers Counted'] > 0].groupby('Username')['Drawers Counted'].sum().sort_values().head(10)
+
+    # Plotting the Top 10 and Bottom 10 charts based on "Drawers Counted"
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    # Plot Top 10 "Drawers Counted" by Username
+    top_10_by_username.plot(kind='bar', ax=ax1, color='green')
+    ax1.set_title('Top 10 Drawers Counted by Username')
+    ax1.set_xlabel('Username')
+    ax1.set_ylabel('Drawers Counted')
+
+    # Plot Bottom 10 "Drawers Counted" by Username excluding 0 values
+    bottom_10_by_username.plot(kind='bar', ax=ax2, color='red')
+    ax2.set_title('Bottom 10 Drawers Counted by Username (Excluding 0)')
+    ax2.set_xlabel('Username')
+    ax2.set_ylabel('Drawers Counted')
+
+    # Display the plots
+    plt.tight_layout()
+    st.pyplot(fig)
 
 else:
     st.write("Please upload a CSV file to get started.")
