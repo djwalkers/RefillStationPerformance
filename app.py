@@ -17,10 +17,6 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
     mapping_data = pd.read_excel(uploaded_file_2, usecols=[0, 1])  # Read columns A (Resource Identity) and B (Resource Name)
     mapping_data.columns = ['Resource Identity', 'Resource Name']  # Rename columns for clarity
 
-    # Display the mapping data for verification
-    st.subheader("Excel Data Preview (Resource Identity Mapping)")
-    st.write(mapping_data.head())
-
     # Rename columns in the first dataset (performance data)
     data.columns = [
         'Resource Identity', 'Username', 'User Active', 'Drawers Counted', 
@@ -33,10 +29,6 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
 
     # Merge the two datasets on "Resource Identity"
     merged_data = pd.merge(data, mapping_data, on="Resource Identity", how="left")
-
-    # Display the merged data
-    st.subheader("Merged Data (Performance + Resource Identity Mapping)")
-    st.write(merged_data)
 
     # Interactive filters
     st.sidebar.header("Filters")
@@ -71,6 +63,16 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
         (filtered_data['Damaged Drawers Processed'] > 0) & 
         (filtered_data['Damaged Products Processed'] > 0)
     ]
+
+    # Plotting the Total Drawers Counted based on "Resource Name"
+    total_drawers_by_resource_name = filtered_data.groupby('Resource Name')['Drawers Counted'].sum().sort_values(ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    total_drawers_by_resource_name.plot(kind='bar', ax=ax, color='purple')
+    ax.set_title('Total Drawers Counted by Resource Name')
+    ax.set_xlabel('Resource Name')
+    ax.set_ylabel('Total Drawers Counted')
+    st.pyplot(fig)
 
     # Top 10 and Bottom 10 Drawers Counted by Username (excluding 0s)
     top_10_by_username = filtered_data.groupby('Username')['Drawers Counted'].sum().sort_values(ascending=False).head(10)
