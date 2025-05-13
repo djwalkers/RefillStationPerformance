@@ -5,16 +5,18 @@ import matplotlib.pyplot as plt
 # Streamlit app title
 st.title('Refill Station Performance Dashboard')
 
-# File uploaders for both datasets (CSV and Excel)
+# File uploaders for the first dataset (CSV)
 uploaded_file_1 = st.file_uploader("Upload the first CSV file (Performance data)", type=["csv"])
-uploaded_file_2 = st.file_uploader("Upload the second Excel file (Station Standard)", type=["xlsx"])
 
-if uploaded_file_1 is not None and uploaded_file_2 is not None:
+# Correct GitHub URL for the Excel file
+excel_file_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/Station%20Standard.xlsx"
+
+if uploaded_file_1 is not None:
     # Load the first dataset (performance data)
     data = pd.read_csv(uploaded_file_1)
 
-    # Load the second dataset (Excel file with Resource Identity mapping)
-    mapping_data = pd.read_excel(uploaded_file_2, usecols=[0, 1])  # Read columns A (Resource Identity) and B (Resource Name)
+    # Load the second dataset (Excel file from GitHub)
+    mapping_data = pd.read_excel(excel_file_url, usecols=[0, 1])  # Read columns A (Resource Identity) and B (Resource Name)
     mapping_data.columns = ['Resource Identity', 'Resource Name']  # Rename columns for clarity
 
     # Rename columns in the first dataset (performance data)
@@ -113,5 +115,4 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
         st.pyplot(fig)
 
 else:
-    st.write("Please upload both CSV and Excel files to get started.")
-
+    st.write("Please upload the first CSV file to get started.")
