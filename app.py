@@ -14,7 +14,7 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
     data = pd.read_csv(uploaded_file_1)
 
     # Load the second dataset (Excel file with Resource Identity mapping)
-    mapping_data = pd.read_excel(uploaded_file_2, usecols=[0, 1])  # Read columns A (Resource Identity) and B (Name)
+    mapping_data = pd.read_excel(uploaded_file_2, usecols=[0, 1])  # Read columns A (Resource Identity) and B (Resource Name)
     mapping_data.columns = ['Resource Identity', 'Resource Name']  # Rename columns for clarity
 
     # Display the mapping data for verification
@@ -38,33 +38,38 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
     st.subheader("Merged Data (Performance + Resource Identity Mapping)")
     st.write(merged_data)
 
-    # Exclude rows where any of the key metrics have 0 values
-    filtered_data = merged_data[
-        (merged_data['Drawers Counted'] > 0) & 
-        (merged_data['Rogues Processed'] > 0) & 
-        (merged_data['Damaged Drawers Processed'] > 0) & 
-        (merged_data['Damaged Products Processed'] > 0)
-    ]
-
     # Interactive filters
     st.sidebar.header("Filters")
     
     # Username filter
     username_filter = st.sidebar.multiselect(
-        "Select Username(s)", filtered_data['Username'].unique(), default=filtered_data['Username'].unique())
+        "Select Username(s)", merged_data['Username'].unique(), default=merged_data['Username'].unique())
     
+    # Resource Name filter (based on Column B from Excel)
+    resource_name_filter = st.sidebar.multiselect(
+        "Select Resource Name(s)", merged_data['Resource Name'].unique(), default=merged_data['Resource Name'].unique())
+
     # Drawers Counted filter (range slider)
-    drawers_min = filtered_data['Drawers Counted'].min()
-    drawers_max = filtered_data['Drawers Counted'].max()
+    drawers_min = merged_data['Drawers Counted'].min()
+    drawers_max = merged_data['Drawers Counted'].max()
     drawers_filter = st.sidebar.slider(
         "Select Drawers Counted Range", min_value=drawers_min, max_value=drawers_max, 
         value=(drawers_min, drawers_max))
 
     # Apply the filters
+    filtered_data = merged_data[
+        (merged_data['Username'].isin(username_filter)) & 
+        (merged_data['Resource Name'].isin(resource_name_filter)) &
+        (merged_data['Drawers Counted'] >= drawers_filter[0]) & 
+        (merged_data['Drawers Counted'] <= drawers_filter[1])
+    ]
+
+    # Exclude rows where any of the key metrics have 0 values
     filtered_data = filtered_data[
-        (filtered_data['Username'].isin(username_filter)) & 
-        (filtered_data['Drawers Counted'] >= drawers_filter[0]) & 
-        (filtered_data['Drawers Counted'] <= drawers_filter[1])
+        (filtered_data['Drawers Counted'] > 0) & 
+        (filtered_data['Rogues Processed'] > 0) & 
+        (filtered_data['Damaged Drawers Processed'] > 0) & 
+        (filtered_data['Damaged Products Processed'] > 0)
     ]
 
     # Top 10 and Bottom 10 Drawers Counted by Username (excluding 0s)
@@ -107,3 +112,4 @@ if uploaded_file_1 is not None and uploaded_file_2 is not None:
 
 else:
     st.write("Please upload both CSV and Excel files to get started.")
+
