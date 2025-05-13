@@ -5,14 +5,19 @@ import matplotlib.pyplot as plt
 # Streamlit app title
 st.title('Refill Station Performance Dashboard')
 
-# File uploader
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+# File uploaders for both datasets (CSV and Excel)
+uploaded_file_1 = st.file_uploader("Upload the first CSV file (Performance data)", type=["csv"])
+uploaded_file_2 = st.file_uploader("Upload the second Excel file (Station Standard)", type=["xlsx"])
 
-if uploaded_file is not None:
-    # Read the uploaded CSV file
-    data = pd.read_csv(uploaded_file)
+if uploaded_file_1 is not None and uploaded_file_2 is not None:
+    # Load the first dataset (performance data)
+    data = pd.read_csv(uploaded_file_1)
 
-    # Rename columns to more meaningful names
+    # Load the second dataset (Excel file with Resource Identity mapping)
+    mapping_data = pd.read_excel(uploaded_file_2, usecols=[0])  # Read only column A (Resource Identity)
+    mapping_data.columns = ['Resource Identity', 'Resource Name']  # Rename columns for clarity
+    
+    # Rename columns in the first dataset
     data.columns = [
         'Resource Identity', 'Username', 'User Active', 'Drawers Counted', 
         'Drawers Counted Per Hour', 'Drawers Refilled', 'Drawers Refilled Per Hour', 
@@ -22,25 +27,32 @@ if uploaded_file is not None:
         'Total Damaged Products Processed', 'Total Rogues Processed'
     ]
 
+    # Merge the two datasets on "Resource Identity"
+    merged_data = pd.merge(data, mapping_data, on="Resource Identity", how="left")
+
+    # Display the merged data
+    st.subheader("Merged Data (Performance + Resource Identity Mapping)")
+    st.write(merged_data)
+
     # Interactive filters
     st.sidebar.header("Filters")
     
     # Username filter
     username_filter = st.sidebar.multiselect(
-        "Select Username(s)", data['Username'].unique(), default=data['Username'].unique())
+        "Select Username(s)", merged_data['Username'].unique(), default=merged_data['Username'].unique())
     
     # Drawers Counted filter (range slider)
-    drawers_min = data['Drawers Counted'].min()
-    drawers_max = data['Drawers Counted'].max()
+    drawers_min = merged_data['Drawers Counted'].min()
+    drawers_max = merged_data['Drawers Counted'].max()
     drawers_filter = st.sidebar.slider(
         "Select Drawers Counted Range", min_value=drawers_min, max_value=drawers_max, 
         value=(drawers_min, drawers_max))
 
     # Apply the filters
-    filtered_data = data[
-        (data['Username'].isin(username_filter)) & 
-        (data['Drawers Counted'] >= drawers_filter[0]) & 
-        (data['Drawers Counted'] <= drawers_filter[1])
+    filtered_data = merged_data[
+        (merged_data['Username'].isin(username_filter)) & 
+        (merged_data['Drawers Counted'] >= drawers_filter[0]) & 
+        (merged_data['Drawers Counted'] <= drawers_filter[1])
     ]
 
     # Exclude rows where "Drawers Counted" is 0 for Top/Bottom charts
@@ -87,4 +99,5 @@ if uploaded_file is not None:
         st.pyplot(fig)
 
 else:
-    st.write("Please upload a CSV file to get started.")
+    st.write("Please upload both CSV and Excel files to get started.")
+
