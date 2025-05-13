@@ -43,20 +43,14 @@ if uploaded_file is not None:
         (data['Drawers Counted'] <= drawers_filter[1])
     ]
 
-    # Exclude rows where any of the metrics have 0 values
-    filtered_data = filtered_data[
-        (filtered_data['Drawers Counted'] > 0) & 
-        (filtered_data['Rogues Processed'] > 0) & 
-        (filtered_data['Damaged Drawers Processed'] > 0) & 
-        (filtered_data['Damaged Products Processed'] > 0)
+    # Exclude rows where "Drawers Counted" is 0 for Top/Bottom charts
+    filtered_data_for_top_bottom = filtered_data[
+        (filtered_data['Drawers Counted'] > 0)
     ]
 
-    # Generating the requested charts for metrics by Username
-    metrics = ['Drawers Counted', 'Rogues Processed', 'Damaged Drawers Processed', 'Damaged Products Processed']
-    
-    # Top 10 and Bottom 10 Drawers Counted by Username
-    top_10_by_username = filtered_data.groupby('Username')['Drawers Counted'].sum().sort_values(ascending=False).head(10)
-    bottom_10_by_username = filtered_data[filtered_data['Drawers Counted'] > 0].groupby('Username')['Drawers Counted'].sum().sort_values().head(10)
+    # Top 10 and Bottom 10 Drawers Counted by Username (excluding 0s)
+    top_10_by_username = filtered_data_for_top_bottom.groupby('Username')['Drawers Counted'].sum().sort_values(ascending=False).head(10)
+    bottom_10_by_username = filtered_data_for_top_bottom.groupby('Username')['Drawers Counted'].sum().sort_values().head(10)
 
     # Plotting the Top 10 and Bottom 10 charts based on "Drawers Counted"
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
@@ -76,6 +70,21 @@ if uploaded_file is not None:
     # Display the plots
     plt.tight_layout()
     st.pyplot(fig)
+
+    # Other charts (all metrics excluding 0s for additional metrics)
+    metrics = ['Rogues Processed', 'Damaged Drawers Processed', 'Damaged Products Processed']
+    
+    for metric in metrics:
+        # Grouping the data by Username and summing the metric values (no exclusion for 0s)
+        metric_by_username = filtered_data.groupby('Username')[metric].sum().sort_values(ascending=False)
+        
+        # Plotting the data for each metric
+        fig, ax = plt.subplots(figsize=(10, 6))
+        metric_by_username.plot(kind='bar', ax=ax, color='skyblue')
+        ax.set_title(f'{metric} by Username')
+        ax.set_xlabel('Username')
+        ax.set_ylabel(metric)
+        st.pyplot(fig)
 
 else:
     st.write("Please upload a CSV file to get started.")
