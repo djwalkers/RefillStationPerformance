@@ -7,14 +7,47 @@ from urllib.parse import quote
 import re
 from datetime import datetime
 
+# ---- COLOR STYLES ----
+PRIMARY_COLOR = "#DA362C"
+BG_COLOR = "#DA362C"
+FG_COLOR = "#FFFFFF"
+AXIS_COLOR = "#333333"
+
+st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
+
+# ---- Custom CSS for background, fonts, Streamlit widgets
+st.markdown(f"""
+    <style>
+    .stApp {{
+        background-color: {BG_COLOR} !important;
+        color: {FG_COLOR};
+    }}
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {{
+        color: {FG_COLOR};
+    }}
+    .st-bq {{
+        background-color: {PRIMARY_COLOR} !important;
+        color: {FG_COLOR};
+    }}
+    .stButton > button {{
+        background-color: {PRIMARY_COLOR};
+        color: {FG_COLOR};
+        border: 1px solid {PRIMARY_COLOR};
+    }}
+    .stSelectbox, .stTextInput, .stDataFrame, .stTable {{
+        background-color: #fff;
+        color: {AXIS_COLOR};
+    }}
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("Refill Station Performance Dashboard")
+
 # --- CONFIG ---
 GITHUB_USER = "djwalkers"
 REPO_NAME = "RefillStationPerformance"
 DATA_FOLDER = "Data"
 FILES_FOLDER = "Files"
-
-st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
-st.title("Refill Station Performance Dashboard")
 
 # --- FILE URLS ---
 date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
@@ -146,6 +179,70 @@ def get_current_week_and_month():
 
 current_week, current_month = get_current_week_and_month()
 
+def make_leaderboard(df, value_column):
+    """Aggregate by Users, ignore zeros, return sorted df."""
+    temp = (
+        df.groupby("Users", as_index=False)[value_column]
+        .sum()
+        .query(f"`{value_column}` != 0")
+        .sort_values(value_column, ascending=True)
+    )
+    return temp
+
+def show_bar_chart(df, x, y, title):
+    fig, ax = plt.subplots(figsize=(8, max(5, len(df) * 0.35)))
+    ax.barh(df[y], df[x], color=PRIMARY_COLOR, edgecolor=PRIMARY_COLOR)
+    ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
+    ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold")
+    ax.set_title(title, color=FG_COLOR, weight="bold")
+    ax.tick_params(axis='x', colors=FG_COLOR)
+    ax.tick_params(axis='y', colors=FG_COLOR)
+    fig.patch.set_facecolor(BG_COLOR)
+    ax.set_facecolor(BG_COLOR)
+    plt.tight_layout()
+    st.pyplot(fig)
+
+def show_all_leaderboards(df, tag):
+    st.subheader(f"Leaderboard: Carts Counted Per Hour by User ({tag})")
+    leaderboard = make_leaderboard(df, "Carts Counted Per Hour")
+    show_bar_chart(leaderboard, "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
+    st.dataframe(leaderboard, use_container_width=True)
+    st.download_button(
+        f"Download {tag} Leaderboard (Carts) as CSV",
+        leaderboard.to_csv(index=False),
+        f"{tag.lower()}_dashboard_leaderboard_carts.csv"
+    )
+    # Rogues Processed
+    st.subheader(f"Leaderboard: Rogues Processed by User ({tag})")
+    rogues = make_leaderboard(df, "Rogues Processed")
+    show_bar_chart(rogues, "Rogues Processed", "Users", "Rogues Processed by User")
+    st.dataframe(rogues, use_container_width=True)
+    st.download_button(
+        f"Download {tag} Leaderboard (Rogues) as CSV",
+        rogues.to_csv(index=False),
+        f"{tag.lower()}_dashboard_leaderboard_rogues.csv"
+    )
+    # Damaged Drawers
+    st.subheader(f"Leaderboard: Damaged Drawers Processed by User ({tag})")
+    drawers = make_leaderboard(df, "Damaged Drawers Processed")
+    show_bar_chart(drawers, "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
+    st.dataframe(drawers, use_container_width=True)
+    st.download_button(
+        f"Download {tag} Leaderboard (Damaged Drawers) as CSV",
+        drawers.to_csv(index=False),
+        f"{tag.lower()}_dashboard_leaderboard_drawers.csv"
+    )
+    # Damaged Products
+    st.subheader(f"Leaderboard: Damaged Products Processed by User ({tag})")
+    products = make_leaderboard(df, "Damaged Products Processed")
+    show_bar_chart(products, "Damaged Products Processed", "Users", "Damaged Products Processed by User")
+    st.dataframe(products, use_container_width=True)
+    st.download_button(
+        f"Download {tag} Leaderboard (Damaged Products) as CSV",
+        products.to_csv(index=False),
+        f"{tag.lower()}_dashboard_leaderboard_products.csv"
+    )
+
 # --- 4. DASHBOARD TABS ---
 tab1, tab2, tab3, tab4 = st.tabs([
     "Hourly Dashboard", 
@@ -159,17 +256,18 @@ with tab1:
     filter_cols = []
 
     # Filters
+    df = data.copy()
     # Month
-    if "Month" in data.columns:
-        months = data["Month"].dropna().unique()
+    if "Month" in df.columns:
+        months = df["Month"].dropna().unique()
         month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()), key="hour_month")
         if month_sel != "All":
-            data = data[data["Month"] == month_sel]
+            df = df[df["Month"] == month_sel]
             filter_cols.append(f"Month={month_sel}")
 
     # Date
-    if "Date" in data.columns:
-        dates = data["Date"].dropna().unique()
+    if "Date" in df.columns:
+        dates = df["Date"].dropna().unique()
         try:
             dates = pd.to_datetime(dates)
             dates = sorted(dates)
@@ -177,156 +275,83 @@ with tab1:
             dates = sorted(dates.tolist())
         date_sel = st.selectbox("Select Date:", ["All"] + [str(d)[:10] for d in dates], key="hour_date")
         if date_sel != "All":
-            data = data[data["Date"].astype(str).str[:10] == date_sel]
+            df = df[df["Date"].astype(str).str[:10] == date_sel]
             filter_cols.append(f"Date={date_sel}")
 
     # Time
-    if "Time" in data.columns:
-        times = data["Time"].dropna().unique()
+    if "Time" in df.columns:
+        times = df["Time"].dropna().unique()
         times = sorted([str(t) for t in times if t is not None])
         time_sel = st.selectbox("Select Time:", ["All"] + times, key="hour_time")
         if time_sel != "All":
-            data = data[data["Time"].astype(str) == time_sel]
+            df = df[df["Time"].astype(str) == time_sel]
             filter_cols.append(f"Time={time_sel}")
 
     # Station Type
-    if "Station Type" in data.columns:
-        station_types = data["Station Type"].dropna().unique()
+    if "Station Type" in df.columns:
+        station_types = df["Station Type"].dropna().unique()
         station_types = sorted([str(t) for t in station_types])
         station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="hour_station")
         if station_sel != "All":
-            data = data[data["Station Type"].astype(str) == station_sel]
+            df = df[df["Station Type"].astype(str) == station_sel]
             filter_cols.append(f"Station Type={station_sel}")
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-
-    # Leaderboard (Users by Carts Counted Per Hour)
-    leaderboard = (
-        data.groupby("Users", as_index=False)["Carts Counted Per Hour"]
-        .sum()
-        .sort_values("Carts Counted Per Hour", ascending=True)
-    )
-    st.subheader("Leaderboard: Carts Counted Per Hour by User")
-
-    # Flipped horizontal bar chart
-    fig, ax = plt.subplots(figsize=(8, max(5, len(leaderboard) * 0.35)))
-    ax.barh(leaderboard["Users"], leaderboard["Carts Counted Per Hour"])
-    ax.set_xlabel("Carts Counted Per Hour")
-    ax.set_ylabel("User")
-    ax.set_title("Carts Counted Per Hour by User")
-    st.pyplot(fig)
-
-    # Table
-    st.dataframe(leaderboard, use_container_width=True)
-
-    # Download
-    st.download_button(
-        "Download Leaderboard as CSV",
-        leaderboard.to_csv(index=False),
-        "hourly_dashboard_leaderboard.csv"
-    )
+    show_all_leaderboards(df, "Hourly")
 
 with tab2:
     st.header("Weekly Dashboard")
     st.markdown(f"**Current Week Number:** {current_week}")
     filter_cols = []
 
+    df = data.copy()
     # Week number filter
-    if "Week" in data.columns:
-        weeks = data["Week"].dropna().unique()
+    if "Week" in df.columns:
+        weeks = df["Week"].dropna().unique()
         weeks = sorted([str(int(w)) for w in weeks if pd.notnull(w)])
         week_sel = st.selectbox("Select Week Number:", ["All"] + weeks, key="week_week")
         if week_sel != "All":
-            data_week = data[data["Week"].astype(str) == week_sel]
+            df = df[df["Week"].astype(str) == week_sel]
             filter_cols.append(f"Week={week_sel}")
-        else:
-            data_week = data.copy()
-    else:
-        data_week = data.copy()
 
     # Station Type
-    if "Station Type" in data.columns:
-        station_types = data["Station Type"].dropna().unique()
+    if "Station Type" in df.columns:
+        station_types = df["Station Type"].dropna().unique()
         station_types = sorted([str(t) for t in station_types])
         station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="week_station")
         if station_sel != "All":
-            data_week = data_week[data_week["Station Type"].astype(str) == station_sel]
+            df = df[df["Station Type"].astype(str) == station_sel]
             filter_cols.append(f"Station Type={station_sel}")
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-
-    leaderboard_week = (
-        data_week.groupby("Users", as_index=False)["Carts Counted Per Hour"]
-        .sum()
-        .sort_values("Carts Counted Per Hour", ascending=True)
-    )
-    st.subheader("Leaderboard: Carts Counted Per Hour by User (Weekly)")
-
-    fig, ax = plt.subplots(figsize=(8, max(5, len(leaderboard_week) * 0.35)))
-    ax.barh(leaderboard_week["Users"], leaderboard_week["Carts Counted Per Hour"])
-    ax.set_xlabel("Carts Counted Per Hour")
-    ax.set_ylabel("User")
-    ax.set_title("Carts Counted Per Hour by User (Weekly)")
-    st.pyplot(fig)
-
-    st.dataframe(leaderboard_week, use_container_width=True)
-
-    st.download_button(
-        "Download Weekly Leaderboard as CSV",
-        leaderboard_week.to_csv(index=False),
-        "weekly_dashboard_leaderboard.csv"
-    )
+    show_all_leaderboards(df, "Weekly")
 
 with tab3:
     st.header("Monthly Dashboard")
     st.markdown(f"**Current Month:** {current_month}")
     filter_cols = []
 
+    df = data.copy()
     # Month filter
-    if "Month" in data.columns:
-        months = data["Month"].dropna().unique()
+    if "Month" in df.columns:
+        months = df["Month"].dropna().unique()
         months = sorted(months.tolist())
         month_sel = st.selectbox("Select Month:", ["All"] + months, key="month_month")
         if month_sel != "All":
-            data_month = data[data["Month"] == month_sel]
+            df = df[df["Month"] == month_sel]
             filter_cols.append(f"Month={month_sel}")
-        else:
-            data_month = data.copy()
-    else:
-        data_month = data.copy()
 
     # Station Type
-    if "Station Type" in data.columns:
-        station_types = data["Station Type"].dropna().unique()
+    if "Station Type" in df.columns:
+        station_types = df["Station Type"].dropna().unique()
         station_types = sorted([str(t) for t in station_types])
         station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="month_station")
         if station_sel != "All":
-            data_month = data_month[data_month["Station Type"].astype(str) == station_sel]
+            df = df[df["Station Type"].astype(str) == station_sel]
             filter_cols.append(f"Station Type={station_sel}")
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-
-    leaderboard_month = (
-        data_month.groupby("Users", as_index=False)["Carts Counted Per Hour"]
-        .sum()
-        .sort_values("Carts Counted Per Hour", ascending=True)
-    )
-    st.subheader("Leaderboard: Carts Counted Per Hour by User (Monthly)")
-
-    fig, ax = plt.subplots(figsize=(8, max(5, len(leaderboard_month) * 0.35)))
-    ax.barh(leaderboard_month["Users"], leaderboard_month["Carts Counted Per Hour"])
-    ax.set_xlabel("Carts Counted Per Hour")
-    ax.set_ylabel("User")
-    ax.set_title("Carts Counted Per Hour by User (Monthly)")
-    st.pyplot(fig)
-
-    st.dataframe(leaderboard_month, use_container_width=True)
-
-    st.download_button(
-        "Download Monthly Leaderboard as CSV",
-        leaderboard_month.to_csv(index=False),
-        "monthly_dashboard_leaderboard.csv"
-    )
+    show_all_leaderboards(df, "Monthly")
 
 with tab4:
     st.header("Raw Data")
