@@ -14,6 +14,23 @@ FILES_FOLDER = "Files"
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 st.title("Refill Station Performance Dashboard")
 
+# --- FILE URLS ---
+date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
+station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
+
+# --- FILE ACCESSIBILITY TEST ---
+st.info("🔎 Checking access to reference Excel files on GitHub...")
+for url, label in [
+    (date_dim_url, "Date Dimension Table.xlsx"),
+    (station_url, "Station Standard.xlsx")
+]:
+    response = requests.get(url)
+    if response.status_code == 200 and len(response.content) > 0:
+        st.success(f"✅ {label} found! ({len(response.content)} bytes)")
+    else:
+        st.error(f"❌ {label} NOT found at expected URL. Check the file name, folder, or GitHub branch.")
+        st.stop()
+
 # --- 1. LOAD RAW DATA FILES FROM GITHUB ---
 @st.cache_data(show_spinner="Loading raw data from GitHub...")
 def load_raw_data():
@@ -37,9 +54,6 @@ def load_raw_data():
 # --- 2. LOAD DIMENSION TABLES ---
 @st.cache_data(show_spinner="Loading reference tables...")
 def load_reference_tables():
-    # Date Dimension
-    date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
-    station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
     date_dim = pd.read_excel(date_dim_url, sheet_name=0)
     station = pd.read_excel(station_url, sheet_name=0)
     return date_dim, station
