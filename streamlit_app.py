@@ -49,8 +49,7 @@ def load_reference_tables():
     st.write("Date Dimension Table.xlsx sheets:", date_excel.sheet_names)
     st.write("Station Standard.xlsx sheets:", station_excel.sheet_names)
 
-    # Try to load a default sheet (likely to fail, but prints available sheets)
-    # Replace 'Sheet1' and 'Station' after you see what is printed above!
+    # Replace with your actual sheet names after checking printed output!
     try:
         date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
     except Exception as e:
@@ -108,8 +107,9 @@ try:
 except Exception:
     pass
 
-# Clean Users column
-data['Users'] = data['User'].astype(str).str.split(' (').str[0].str.replace('*', '', regex=False).str.strip()
+# Clean Users column safely (no regex issues)
+data['Users'] = data['User'].astype(str).str.split(' (', n=1, expand=False)
+data['Users'] = data['Users'].str[0].str.replace('*', '', regex=False).str.strip()
 data = data.drop(columns=['User'])
 
 # Merge with DateDimensionTable on 'Date'
