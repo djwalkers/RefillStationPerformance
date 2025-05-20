@@ -42,9 +42,8 @@ def load_raw_data():
 def load_reference_tables():
     date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
     station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
-    # Explicitly use "Sheet1"
     date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
-    station = pd.read_excel(station_url, sheet_name="Sheet1")
+    station = pd.read_excel(station_url, sheet_name="Station")
     return date_dim, station
 
 raw_data = load_raw_data()
