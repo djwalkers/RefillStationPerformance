@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-from urllib.parse import quote  # <-- NEW: for encoding filenames
+from urllib.parse import quote
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
@@ -21,7 +21,6 @@ def load_raw_data():
     data_files = [f['name'] for f in files_api if f['name'].endswith('.csv') or f['name'].endswith('.xlsx')]
     dfs = []
     for fname in data_files:
-        # Use quote to encode spaces/special characters in file name
         file_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{DATA_FOLDER}/{quote(fname)}"
         try:
             if fname.endswith('.csv'):
@@ -43,8 +42,9 @@ def load_raw_data():
 def load_reference_tables():
     date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
     station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
-    date_dim = pd.read_excel(date_dim_url, sheet_name="DateDimensionTable")
-    station = pd.read_excel(station_url, sheet_name="Station")
+    # Explicitly use "Sheet1"
+    date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
+    station = pd.read_excel(station_url, sheet_name="Sheet1")
     return date_dim, station
 
 raw_data = load_raw_data()
