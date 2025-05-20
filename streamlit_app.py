@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+from urllib.parse import quote  # <-- NEW: for encoding filenames
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
@@ -20,7 +21,8 @@ def load_raw_data():
     data_files = [f['name'] for f in files_api if f['name'].endswith('.csv') or f['name'].endswith('.xlsx')]
     dfs = []
     for fname in data_files:
-        file_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{DATA_FOLDER}/{fname}"
+        # Use quote to encode spaces/special characters in file name
+        file_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{DATA_FOLDER}/{quote(fname)}"
         try:
             if fname.endswith('.csv'):
                 df = pd.read_csv(file_url)
