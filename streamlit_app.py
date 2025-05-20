@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 import matplotlib.pyplot as plt
 from urllib.parse import quote
+import re
 
 # --- CONFIG ---
 GITHUB_USER = "djwalkers"
@@ -85,14 +86,30 @@ drop_cols = [
 ]
 data = data.drop(columns=[c for c in drop_cols if c in data.columns], errors='ignore')
 
-# Parse Date and Time from Source.Name (adjust if needed)
+# Parse Date from filename
 data['Date'] = data['Source.Name'].str[:10]
 data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
-data['Time'] = data['Source.Name'].str[10:15].str.replace('-', ':')
-try:
-    data['Time'] = pd.to_datetime(data['Time'], format='%H:%M', errors='coerce').dt.time
-except Exception:
-    pass
+
+# --- Improved Time Extraction from filename ---
+def extract_time_from_filename(fname):
+    # Expects filenames like '14-02-2025 07-00.csv'
+    m = re.search(r"\s?(\d{2})-(\d{2})\.csv$", fname)
+    if m:
+        hour, minute = m.groups()
+        return f"{hour}:{minute}"
+    else:
+        # Try to get the 11:16 slice, fallback
+        try:
+            s = fname[11:16].replace("-", ":").strip()
+            return s if len(s) == 5 and ':' in s else None
+        except:
+            return None
+
+data['Time'] = data['Source.Name'].apply(extract_time_from_filename)
+
+# (Optional) Show filename and parsed time for debug/confirmation
+st.subheader("Filename and Parsed Time Preview")
+st.dataframe(data[['Source.Name', 'Time']].head(20))
 
 # Clean Users column (from Power Query logic)
 data['Users'] = data['User'].astype(str).apply(lambda x: x.partition(' (')[0].replace('*','').strip())
@@ -157,7 +174,7 @@ with tab1:
     # Time
     if "Time" in data.columns:
         times = data["Time"].dropna().unique()
-        times = sorted([str(t) for t in times])
+        times = sorted([str(t) for t in times if t is not None])
         time_sel = st.selectbox("Select Time:", ["All"] + times)
         if time_sel != "All":
             data = data[data["Time"].astype(str) == time_sel]
