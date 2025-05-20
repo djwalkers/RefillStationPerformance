@@ -5,6 +5,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 from urllib.parse import quote
 import re
+from datetime import datetime
 
 # --- CONFIG ---
 GITHUB_USER = "djwalkers"
@@ -92,13 +93,11 @@ data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
 
 # --- Improved Time Extraction from filename ---
 def extract_time_from_filename(fname):
-    # Expects filenames like '14-02-2025 07-00.csv'
     m = re.search(r"\s?(\d{2})-(\d{2})\.csv$", fname)
     if m:
         hour, minute = m.groups()
         return f"{hour}:{minute}"
     else:
-        # Try to get the 11:16 slice, fallback
         try:
             s = fname[11:16].replace("-", ":").strip()
             return s if len(s) == 5 and ':' in s else None
@@ -106,10 +105,6 @@ def extract_time_from_filename(fname):
             return None
 
 data['Time'] = data['Source.Name'].apply(extract_time_from_filename)
-
-# (Optional) Show filename and parsed time for debug/confirmation
-st.subheader("Filename and Parsed Time Preview")
-st.dataframe(data[['Source.Name', 'Time']].head(20))
 
 # Clean Users column (from Power Query logic)
 data['Users'] = data['User'].astype(str).apply(lambda x: x.partition(' (')[0].replace('*','').strip())
@@ -142,8 +137,22 @@ if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
 else:
     data['Carts Counted Per Hour'] = 0
 
-# --- 4. HOURLY DASHBOARD TAB ---
-tab1, tab2 = st.tabs(["Hourly Dashboard", "Raw Data"])
+# --- HELPER for displaying current week/month ---
+def get_current_week_and_month():
+    today = datetime.today()
+    week = today.isocalendar()[1]
+    month = today.strftime('%B')
+    return week, month
+
+current_week, current_month = get_current_week_and_month()
+
+# --- 4. DASHBOARD TABS ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Hourly Dashboard", 
+    "Weekly Dashboard",
+    "Monthly Dashboard",
+    "Raw Data"
+])
 
 with tab1:
     st.header("Hourly Dashboard")
@@ -153,7 +162,7 @@ with tab1:
     # Month
     if "Month" in data.columns:
         months = data["Month"].dropna().unique()
-        month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()))
+        month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()), key="hour_month")
         if month_sel != "All":
             data = data[data["Month"] == month_sel]
             filter_cols.append(f"Month={month_sel}")
@@ -166,7 +175,7 @@ with tab1:
             dates = sorted(dates)
         except Exception:
             dates = sorted(dates.tolist())
-        date_sel = st.selectbox("Select Date:", ["All"] + [str(d)[:10] for d in dates])
+        date_sel = st.selectbox("Select Date:", ["All"] + [str(d)[:10] for d in dates], key="hour_date")
         if date_sel != "All":
             data = data[data["Date"].astype(str).str[:10] == date_sel]
             filter_cols.append(f"Date={date_sel}")
@@ -175,7 +184,7 @@ with tab1:
     if "Time" in data.columns:
         times = data["Time"].dropna().unique()
         times = sorted([str(t) for t in times if t is not None])
-        time_sel = st.selectbox("Select Time:", ["All"] + times)
+        time_sel = st.selectbox("Select Time:", ["All"] + times, key="hour_time")
         if time_sel != "All":
             data = data[data["Time"].astype(str) == time_sel]
             filter_cols.append(f"Time={time_sel}")
@@ -184,7 +193,7 @@ with tab1:
     if "Station Type" in data.columns:
         station_types = data["Station Type"].dropna().unique()
         station_types = sorted([str(t) for t in station_types])
-        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types)
+        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="hour_station")
         if station_sel != "All":
             data = data[data["Station Type"].astype(str) == station_sel]
             filter_cols.append(f"Station Type={station_sel}")
@@ -199,7 +208,7 @@ with tab1:
     )
     st.subheader("Leaderboard: Carts Counted Per Hour by User")
 
-    # Bar chart
+    # Flipped horizontal bar chart
     fig, ax = plt.subplots(figsize=(8, max(5, len(leaderboard) * 0.35)))
     ax.barh(leaderboard["Users"], leaderboard["Carts Counted Per Hour"])
     ax.set_xlabel("Carts Counted Per Hour")
@@ -218,5 +227,107 @@ with tab1:
     )
 
 with tab2:
+    st.header("Weekly Dashboard")
+    st.markdown(f"**Current Week Number:** {current_week}")
+    filter_cols = []
+
+    # Week number filter
+    if "Week" in data.columns:
+        weeks = data["Week"].dropna().unique()
+        weeks = sorted([str(int(w)) for w in weeks if pd.notnull(w)])
+        week_sel = st.selectbox("Select Week Number:", ["All"] + weeks, key="week_week")
+        if week_sel != "All":
+            data_week = data[data["Week"].astype(str) == week_sel]
+            filter_cols.append(f"Week={week_sel}")
+        else:
+            data_week = data.copy()
+    else:
+        data_week = data.copy()
+
+    # Station Type
+    if "Station Type" in data.columns:
+        station_types = data["Station Type"].dropna().unique()
+        station_types = sorted([str(t) for t in station_types])
+        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="week_station")
+        if station_sel != "All":
+            data_week = data_week[data_week["Station Type"].astype(str) == station_sel]
+            filter_cols.append(f"Station Type={station_sel}")
+
+    st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
+
+    leaderboard_week = (
+        data_week.groupby("Users", as_index=False)["Carts Counted Per Hour"]
+        .sum()
+        .sort_values("Carts Counted Per Hour", ascending=True)
+    )
+    st.subheader("Leaderboard: Carts Counted Per Hour by User (Weekly)")
+
+    fig, ax = plt.subplots(figsize=(8, max(5, len(leaderboard_week) * 0.35)))
+    ax.barh(leaderboard_week["Users"], leaderboard_week["Carts Counted Per Hour"])
+    ax.set_xlabel("Carts Counted Per Hour")
+    ax.set_ylabel("User")
+    ax.set_title("Carts Counted Per Hour by User (Weekly)")
+    st.pyplot(fig)
+
+    st.dataframe(leaderboard_week, use_container_width=True)
+
+    st.download_button(
+        "Download Weekly Leaderboard as CSV",
+        leaderboard_week.to_csv(index=False),
+        "weekly_dashboard_leaderboard.csv"
+    )
+
+with tab3:
+    st.header("Monthly Dashboard")
+    st.markdown(f"**Current Month:** {current_month}")
+    filter_cols = []
+
+    # Month filter
+    if "Month" in data.columns:
+        months = data["Month"].dropna().unique()
+        months = sorted(months.tolist())
+        month_sel = st.selectbox("Select Month:", ["All"] + months, key="month_month")
+        if month_sel != "All":
+            data_month = data[data["Month"] == month_sel]
+            filter_cols.append(f"Month={month_sel}")
+        else:
+            data_month = data.copy()
+    else:
+        data_month = data.copy()
+
+    # Station Type
+    if "Station Type" in data.columns:
+        station_types = data["Station Type"].dropna().unique()
+        station_types = sorted([str(t) for t in station_types])
+        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="month_station")
+        if station_sel != "All":
+            data_month = data_month[data_month["Station Type"].astype(str) == station_sel]
+            filter_cols.append(f"Station Type={station_sel}")
+
+    st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
+
+    leaderboard_month = (
+        data_month.groupby("Users", as_index=False)["Carts Counted Per Hour"]
+        .sum()
+        .sort_values("Carts Counted Per Hour", ascending=True)
+    )
+    st.subheader("Leaderboard: Carts Counted Per Hour by User (Monthly)")
+
+    fig, ax = plt.subplots(figsize=(8, max(5, len(leaderboard_month) * 0.35)))
+    ax.barh(leaderboard_month["Users"], leaderboard_month["Carts Counted Per Hour"])
+    ax.set_xlabel("Carts Counted Per Hour")
+    ax.set_ylabel("User")
+    ax.set_title("Carts Counted Per Hour by User (Monthly)")
+    st.pyplot(fig)
+
+    st.dataframe(leaderboard_month, use_container_width=True)
+
+    st.download_button(
+        "Download Monthly Leaderboard as CSV",
+        leaderboard_month.to_csv(index=False),
+        "monthly_dashboard_leaderboard.csv"
+    )
+
+with tab4:
     st.header("Raw Data")
     st.dataframe(data, use_container_width=True)
