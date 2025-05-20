@@ -42,8 +42,25 @@ def load_raw_data():
 def load_reference_tables():
     date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
     station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
-    date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
-    station = pd.read_excel(station_url, sheet_name="Station")
+
+    # DEBUG: Show all available sheet names in each file
+    date_excel = pd.ExcelFile(date_dim_url)
+    station_excel = pd.ExcelFile(station_url)
+    st.write("Date Dimension Table.xlsx sheets:", date_excel.sheet_names)
+    st.write("Station Standard.xlsx sheets:", station_excel.sheet_names)
+
+    # Try to load a default sheet (likely to fail, but prints available sheets)
+    # Replace 'Sheet1' and 'Station' after you see what is printed above!
+    try:
+        date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
+    except Exception as e:
+        st.error(f"Could not load 'Sheet1' from Date Dimension Table.xlsx: {e}")
+        date_dim = None
+    try:
+        station = pd.read_excel(station_url, sheet_name="Station")
+    except Exception as e:
+        st.error(f"Could not load 'Station' from Station Standard.xlsx: {e}")
+        station = None
     return date_dim, station
 
 raw_data = load_raw_data()
@@ -51,6 +68,10 @@ date_dim, station = load_reference_tables()
 
 if raw_data.empty:
     st.error("No data files found in the Data folder. Please check your GitHub repository.")
+    st.stop()
+
+if (date_dim is None) or (station is None):
+    st.error("Please update the sheet names in the code as printed above and rerun the app.")
     st.stop()
 
 # === 3. Data transformation steps (Power Query logic) ===
@@ -92,10 +113,18 @@ data['Users'] = data['User'].astype(str).str.split(' (').str[0].str.replace('*',
 data = data.drop(columns=['User'])
 
 # Merge with DateDimensionTable on 'Date'
-data = data.merge(date_dim[['Date', 'Year', 'Month', 'Week']], on='Date', how='left')
+if ('Date' in date_dim.columns) and all(x in date_dim.columns for x in ['Year', 'Month', 'Week']):
+    data = data.merge(date_dim[['Date', 'Year', 'Month', 'Week']], on='Date', how='left')
+else:
+    st.warning("Could not find 'Date', 'Year', 'Month', 'Week' columns in the Date Dimension Table. Check your reference file.")
 
 # Merge with Station on 'Station Id'
-data = data.merge(station.rename(columns={'Station': 'Station Id'}), on='Station Id', how='left')
+if 'Station' in station.columns:
+    data = data.merge(station.rename(columns={'Station': 'Station Id'}), on='Station Id', how='left')
+elif 'Station Id' in station.columns:
+    data = data.merge(station, on='Station Id', how='left')
+else:
+    st.warning("Could not find 'Station' or 'Station Id' column in Station Standard. Check your reference file.")
 
 # Rename Station columns
 data = data.rename(columns={
@@ -105,9 +134,13 @@ data = data.rename(columns={
 })
 
 # Carts Counted Per Hour
-data['Carts Counted Per Hour'] = (data['Drawers Counted'] / data['Drawer Avg']).round(2)
-data['Drawers Counted'] = data['Drawers Counted'].fillna(0)
-data['Login Count'] = data['Drawers Counted'].apply(lambda x: 1 if x > 0 else 0)
+if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
+    data['Carts Counted Per Hour'] = (data['Drawers Counted'] / data['Drawer Avg']).round(2)
+    data['Drawers Counted'] = data['Drawers Counted'].fillna(0)
+    data['Login Count'] = data['Drawers Counted'].apply(lambda x: 1 if x > 0 else 0)
+else:
+    data['Carts Counted Per Hour'] = 0
+    data['Login Count'] = 0
 
 # Exclude certain users
 exclude_users = [
@@ -117,7 +150,8 @@ exclude_users = [
     "MICHAEL RUSHTON", "MICHAL ROWDO", "PIETER DAVIDS", "ROGER COULSON", "ROXANNE HAYNES",
     "SAM BENNETT", "STUART FOWLES", "TAMMY HITCHMOUGH", "TAYLOR MADDOCK", "TAYLOR MADDOX", "VASELA VELKOVA"
 ]
-data = data[~data['Users'].isin(exclude_users)].reset_index(drop=True)
+if 'Users' in data.columns:
+    data = data[~data['Users'].isin(exclude_users)].reset_index(drop=True)
 
 data['Index'] = data.index
 
@@ -133,28 +167,34 @@ data = data[main_cols]
 # === 4. Build outputs for your dashboard ===
 
 # Output 1: Weekly summary by user
-weekly = (
-    data.groupby(['Users', 'Week'], as_index=False)['Drawers Counted']
-    .sum()
-    .rename(columns={'Drawers Counted': 'Drawers Weekly'})
-)
-weekly['Index'] = weekly.index
-weekly = weekly[['Index', 'Users', 'Week', 'Drawers Weekly']]
+if 'Users' in data.columns and 'Week' in data.columns and 'Drawers Counted' in data.columns:
+    weekly = (
+        data.groupby(['Users', 'Week'], as_index=False)['Drawers Counted']
+        .sum()
+        .rename(columns={'Drawers Counted': 'Drawers Weekly'})
+    )
+    weekly['Index'] = weekly.index
+    weekly = weekly[['Index', 'Users', 'Week', 'Drawers Weekly']]
+else:
+    weekly = pd.DataFrame()
 
 # Output 2: Total carts hourly summary
-hourly = (
-    data.groupby(['Station Type', 'Time', 'Station Id'], as_index=False)['Carts Counted Per Hour']
-    .sum()
-    .rename(columns={'Carts Counted Per Hour': 'Total Carts Counted'})
-)
-hourly['Total Carts Counted'] = hourly['Total Carts Counted'].fillna(0)
-recent_dates = (
-    data.groupby(['Station Type', 'Time', 'Station Id'])['Date']
-    .max()
-    .reset_index()
-)
-hourly = hourly.merge(recent_dates, on=['Station Type', 'Time', 'Station Id'], how='left')
-hourly = hourly[['Date', 'Station Type', 'Time', 'Station Id', 'Total Carts Counted']]
+if all(x in data.columns for x in ['Station Type', 'Time', 'Station Id', 'Carts Counted Per Hour', 'Date']):
+    hourly = (
+        data.groupby(['Station Type', 'Time', 'Station Id'], as_index=False)['Carts Counted Per Hour']
+        .sum()
+        .rename(columns={'Carts Counted Per Hour': 'Total Carts Counted'})
+    )
+    hourly['Total Carts Counted'] = hourly['Total Carts Counted'].fillna(0)
+    recent_dates = (
+        data.groupby(['Station Type', 'Time', 'Station Id'])['Date']
+        .max()
+        .reset_index()
+    )
+    hourly = hourly.merge(recent_dates, on=['Station Type', 'Time', 'Station Id'], how='left')
+    hourly = hourly[['Date', 'Station Type', 'Time', 'Station Id', 'Total Carts Counted']]
+else:
+    hourly = pd.DataFrame()
 
 # === 5. Streamlit Tabs ===
 tab1, tab2, tab3 = st.tabs(["Full Data", "Weekly User Summary", "Total Carts Hourly"])
