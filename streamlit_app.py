@@ -4,7 +4,6 @@ import requests
 from urllib.parse import quote
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
-
 st.title("Refill Station Performance Dashboard")
 
 # === 1. Define GitHub locations ===
@@ -107,9 +106,8 @@ try:
 except Exception:
     pass
 
-# Clean Users column safely (no regex issues)
-data['Users'] = data['User'].astype(str).str.split(' (', n=1, expand=False)
-data['Users'] = data['Users'].str[0].str.replace('*', '', regex=False).str.strip()
+# Clean Users column (safe, no regex!)
+data['Users'] = data['User'].astype(str).apply(lambda x: x.partition(' (')[0].replace('*','').strip())
 data = data.drop(columns=['User'])
 
 # Merge with DateDimensionTable on 'Date'
