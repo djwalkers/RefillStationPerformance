@@ -12,6 +12,8 @@ PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
 FG_COLOR = "#FFFFFF"
 AXIS_COLOR = "#333333"
+BAR_COLOR = "#FFFFFF"     # White bars
+BAR_EDGE = "#8B1A12"      # Dark red border
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
@@ -41,6 +43,9 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
+# ---- SHOW LOGO ----
+logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/The%20Roc.png"
+st.image(logo_url, width=180)
 st.title("Refill Station Performance Dashboard")
 
 # --- CONFIG ---
@@ -191,7 +196,8 @@ def make_leaderboard(df, value_column):
 
 def show_bar_chart(df, x, y, title):
     fig, ax = plt.subplots(figsize=(8, max(5, len(df) * 0.35)))
-    ax.barh(df[y], df[x], color=PRIMARY_COLOR, edgecolor=PRIMARY_COLOR)
+    # White bars with a visible border
+    ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
     ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold")
     ax.set_title(title, color=FG_COLOR, weight="bold")
