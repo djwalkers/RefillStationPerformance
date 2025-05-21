@@ -11,8 +11,8 @@ PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
 FG_COLOR = "#FFFFFF"
 AXIS_COLOR = "#333333"
-BAR_COLOR = "#FFFFFF"     # White bars
-BAR_EDGE = "#8B1A12"      # Dark red border
+BAR_COLOR = "#FFFFFF"
+BAR_EDGE = "#8B1A12"
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
@@ -184,6 +184,9 @@ def show_bar_chart(df, x, y, title):
         f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total:,}</div>",
         unsafe_allow_html=True,
     )
+
+    # Sort so largest value is at the top
+    df = df.sort_values(by=x, ascending=True)
 
     fig, ax = plt.subplots(figsize=(10, max(6, len(df) * 0.45)))
     bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
