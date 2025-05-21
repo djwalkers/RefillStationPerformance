@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -140,15 +139,15 @@ data = data.rename(columns={
     'Drawer Avg': 'Drawer Avg',
     'KPI': 'Station KPI'
 })
+
+# Safe calculation to avoid division by zero/infinity
 if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
-    # Replace 0 or NaN in Drawer Avg with np.nan to prevent division by zero
     drawer_avg = pd.to_numeric(data['Drawer Avg'], errors='coerce').replace(0, pd.NA)
     data['Carts Counted Per Hour'] = (
         pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
     ).fillna(0).round(2)
 else:
     data['Carts Counted Per Hour'] = 0
-
 
 def get_current_week_and_month():
     today = datetime.today()
@@ -186,20 +185,20 @@ def show_bar_chart(df, x, y, title):
         unsafe_allow_html=True,
     )
 
-    fig, ax = plt.subplots(figsize=(max(7, len(df) * 0.45), 6))
-    bars = ax.bar(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
+    fig, ax = plt.subplots(figsize=(10, max(6, len(df) * 0.45)))
+    bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     for bar in bars:
-        height = bar.get_height()
-        if height > 0:
-            ax.annotate(f'{int(round(height))}', 
-                        xy=(bar.get_x() + bar.get_width() / 2, height),
-                        xytext=(0, 3), textcoords="offset points",
-                        ha='center', va='bottom', fontsize=12, color=FG_COLOR, fontweight="bold")
-    ax.set_ylabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
-    ax.set_xlabel(y.replace('_', ' '), color=FG_COLOR, weight="bold")
+        width = bar.get_width()
+        if width > 0:
+            ax.annotate(f'{int(round(width))}', 
+                        xy=(width, bar.get_y() + bar.get_height() / 2),
+                        xytext=(3, 0), textcoords="offset points",
+                        ha='left', va='center', fontsize=12, color=FG_COLOR, fontweight="bold")
+    ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
+    ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold")
     ax.set_title(title, color=FG_COLOR, weight="bold")
-    ax.tick_params(axis='x', colors=FG_COLOR, rotation=35)
     ax.tick_params(axis='y', colors=FG_COLOR)
+    ax.tick_params(axis='x', colors=FG_COLOR)
     fig.patch.set_facecolor(BG_COLOR)
     ax.set_facecolor(BG_COLOR)
     plt.tight_layout()
