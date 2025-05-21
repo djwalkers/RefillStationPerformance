@@ -61,7 +61,7 @@ if uploaded_file is not None:
     if not is_valid_filename(uploaded_file.name):
         st.error(
             "❌ **Filename must be in the format 'DD-MM-YYYY HH-MM.csv'** "
-            "(e.g., '14-02-2025 07-00.csv').\n\n"
+            "(e.g., '07-02-1983 08-00.csv').\n\n"
             "Please rename your file and try again."
         )
         st.stop()  # Prevent any further code from running!
