@@ -171,25 +171,17 @@ def clean_grouped_users(df, value_column):
         df.groupby("Users", as_index=False)[value_column]
         .sum()
     )
-    # Remove zeros, blanks, and NaNs from BOTH axis
-    temp = temp[temp[value_column] != 0]
-    temp = temp[temp["Users"].astype(str).str.strip().replace("0", "").replace("", pd.NA).notna()]
+    # Remove: zeros, blanks, '0', and NaN from BOTH axis
+    temp = temp[
+        (temp[value_column] > 0) &
+        (temp["Users"].astype(str).str.strip() != "") &
+        (temp["Users"].astype(str).str.strip() != "0")
+    ]
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
 def show_bar_chart(df, x, y, title):
     if df.empty or x not in df.columns or y not in df.columns:
-        st.info("No data to display for this selection.")
-        return
-
-    # Ensure values are numeric and drop NAs and zeros
-    df = df[[y, x]].copy()
-    df[x] = pd.to_numeric(df[x], errors='coerce').fillna(0)
-    df = df[df[x] > 0]
-    df = df[df[y].astype(str).str.strip() != ""]
-    df = df[df[y].astype(str).str.strip() != "0"]
-
-    if df.empty:
         st.info("No data to display for this selection.")
         return
 
