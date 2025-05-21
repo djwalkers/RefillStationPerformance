@@ -185,9 +185,13 @@ def show_bar_chart(df, x, y, title):
         st.info("No data to display for this selection.")
         return
 
-    total = int(df[x].sum())
+    total = df[x].sum()
+    if 0 < total < 1:
+        total_label = f"{total:.2f}"
+    else:
+        total_label = f"{int(round(total))}"
     st.markdown(
-        f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total:,}</div>",
+        f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total_label}</div>",
         unsafe_allow_html=True,
     )
 
@@ -199,7 +203,11 @@ def show_bar_chart(df, x, y, title):
     for bar in bars:
         width = bar.get_width()
         if width > 0:
-            ax.annotate(f'{int(round(width))}',
+            if 0 < width < 1:
+                label = f"{width:.2f}"
+            else:
+                label = f"{int(round(width))}"
+            ax.annotate(label,
                         xy=(width, bar.get_y() + bar.get_height() / 2),
                         xytext=(3, 0), textcoords="offset points",
                         ha='left', va='center', fontsize=12, color=FG_COLOR, fontweight="bold")
