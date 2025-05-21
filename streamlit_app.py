@@ -221,12 +221,11 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     plt.tight_layout()
     st.pyplot(fig)
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, = st.tabs([
     "Hourly Dashboard", 
     "Weekly Dashboard",
     "Monthly Dashboard",
-    "Raw Data"
-])
+    ])
 
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
@@ -339,6 +338,3 @@ with tab3:
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
-with tab4:
-    st.header("Raw Data")
-    st.dataframe(data, use_container_width=True)
