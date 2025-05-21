@@ -156,12 +156,22 @@ def clean_grouped_users(df, value_column):
         df.groupby("Users", as_index=False)[value_column]
         .sum()
     )
-    # Remove users that are blank, "0", or all zeros
-    temp = temp[(temp[value_column] != 0) & (temp["Users"].str.strip() != "") & (temp["Users"].str.strip() != "0")]
+    # Remove users that are blank, only spaces, or exactly "0"
+    temp = temp[
+        (temp[value_column] != 0) &
+        (temp["Users"].astype(str).str.strip() != "") &
+        (temp["Users"].astype(str).str.strip() != "0")
+    ]
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
 def show_bar_chart(df, x, y, title):
+    total = df[x].sum()
+    st.markdown(f"<h3 style='color:{FG_COLOR};margin-bottom:0'>{title}</h3>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total:,.2f}</div>",
+        unsafe_allow_html=True,
+    )
     if df.empty:
         st.info("No data to display for this selection.")
         return
@@ -169,7 +179,6 @@ def show_bar_chart(df, x, y, title):
     ax.bar(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     ax.set_ylabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
     ax.set_xlabel(y.replace('_', ' '), color=FG_COLOR, weight="bold")
-    ax.set_title(title, color=FG_COLOR, weight="bold")
     ax.tick_params(axis='x', colors=FG_COLOR, rotation=35)
     ax.tick_params(axis='y', colors=FG_COLOR)
     fig.patch.set_facecolor(BG_COLOR)
@@ -230,21 +239,10 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
 
     # Bar Charts: Carts Counted, Rogues, Damaged Drawers, Damaged Products
-    st.subheader("Carts Counted Per Hour by User")
-    ccph = clean_grouped_users(df, "Carts Counted Per Hour")
-    show_bar_chart(ccph, "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
-    
-    st.subheader("Rogues Processed by User")
-    rogues = clean_grouped_users(df, "Rogues Processed")
-    show_bar_chart(rogues, "Rogues Processed", "Users", "Rogues Processed by User")
-    
-    st.subheader("Damaged Drawers Processed by User")
-    drawers = clean_grouped_users(df, "Damaged Drawers Processed")
-    show_bar_chart(drawers, "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
-    
-    st.subheader("Damaged Products Processed by User")
-    products = clean_grouped_users(df, "Damaged Products Processed")
-    show_bar_chart(products, "Damaged Products Processed", "Users", "Damaged Products Processed by User")
+    show_bar_chart(clean_grouped_users(df, "Carts Counted Per Hour"), "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
+    show_bar_chart(clean_grouped_users(df, "Rogues Processed"), "Rogues Processed", "Users", "Rogues Processed by User")
+    show_bar_chart(clean_grouped_users(df, "Damaged Drawers Processed"), "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
+    show_bar_chart(clean_grouped_users(df, "Damaged Products Processed"), "Damaged Products Processed", "Users", "Damaged Products Processed by User")
 
 with tab1:
     st.header("Hourly Dashboard")
