@@ -271,10 +271,40 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
 
+    # ---- Custom titles per tab ----
+    if tag == "hourly":
+        titles = {
+            "main": "Carts Counted Per Hour",
+            "rogues": "Rogues Processed",
+            "drawers": "Damaged Drawers Processed",
+            "products": "Damaged Products Processed",
+        }
+    elif tag == "weekly":
+        titles = {
+            "main": "Carts Counted Per Week",
+            "rogues": "Rogues Processed",
+            "drawers": "Damaged Drawers Processed",
+            "products": "Damaged Products Processed",
+        }
+    elif tag == "monthly":
+        titles = {
+            "main": "Carts Counted Per Month",
+            "rogues": "Rogues Processed",
+            "drawers": "Damaged Drawers Processed",
+            "products": "Damaged Products Processed",
+        }
+    else:
+        titles = {
+            "main": "Carts Counted Per Hour by User",
+            "rogues": "Rogues Processed by User",
+            "drawers": "Damaged Drawers Processed by User",
+            "products": "Damaged Products Processed by User",
+        }
+
     # --- ROW 1: Full-width main chart ---
     show_bar_chart(
         clean_grouped_users(df, "Carts Counted Per Hour"),
-        "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User", figsize=(14, 6), label_fontsize=11, axis_fontsize=12
+        "Carts Counted Per Hour", "Users", titles["main"], figsize=(14, 6), label_fontsize=11, axis_fontsize=12
     )
 
     # --- ROW 2: Three charts side by side below ---
@@ -282,17 +312,17 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
     with col1:
         show_bar_chart(
             clean_grouped_users(df, "Rogues Processed"),
-            "Rogues Processed", "Users", "Rogues Processed by User", figsize=(6, 6), label_fontsize=9, axis_fontsize=10
+            "Rogues Processed", "Users", titles["rogues"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
     with col2:
         show_bar_chart(
             clean_grouped_users(df, "Damaged Drawers Processed"),
-            "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User", figsize=(6, 6), label_fontsize=9, axis_fontsize=10
+            "Damaged Drawers Processed", "Users", titles["drawers"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
     with col3:
         show_bar_chart(
             clean_grouped_users(df, "Damaged Products Processed"),
-            "Damaged Products Processed", "Users", "Damaged Products Processed by User", figsize=(6, 6), label_fontsize=9, axis_fontsize=10
+            "Damaged Products Processed", "Users", titles["products"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
 
 with tab1:
