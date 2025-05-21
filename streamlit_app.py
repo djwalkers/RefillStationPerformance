@@ -180,7 +180,7 @@ def clean_grouped_users(df, value_column):
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
-def show_bar_chart(df, x, y, title, figsize=(10, 4)):
+def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11):
     if df.empty or x not in df.columns or y not in df.columns:
         st.info("No data to display for this selection.")
         return
@@ -210,12 +210,12 @@ def show_bar_chart(df, x, y, title, figsize=(10, 4)):
             ax.annotate(label,
                         xy=(width, bar.get_y() + bar.get_height() / 2),
                         xytext=(3, 0), textcoords="offset points",
-                        ha='left', va='center', fontsize=12, color=FG_COLOR, fontweight="bold")
-    ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
-    ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold")
-    ax.set_title(title, color=FG_COLOR, weight="bold")
-    ax.tick_params(axis='y', colors=FG_COLOR)
-    ax.tick_params(axis='x', colors=FG_COLOR)
+                        ha='left', va='center', fontsize=label_fontsize, color=FG_COLOR, fontweight="bold")
+    ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
+    ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
+    ax.set_title(title, color=FG_COLOR, weight="bold", fontsize=axis_fontsize+1)
+    ax.tick_params(axis='y', colors=FG_COLOR, labelsize=label_fontsize-1)
+    ax.tick_params(axis='x', colors=FG_COLOR, labelsize=label_fontsize)
     fig.patch.set_facecolor(BG_COLOR)
     ax.set_facecolor(BG_COLOR)
     plt.tight_layout()
@@ -274,7 +274,7 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
     # --- ROW 1: Full-width main chart ---
     show_bar_chart(
         clean_grouped_users(df, "Carts Counted Per Hour"),
-        "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User", figsize=(12, 5)
+        "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User", figsize=(14, 6), label_fontsize=11, axis_fontsize=12
     )
 
     # --- ROW 2: Three charts side by side below ---
@@ -282,17 +282,17 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
     with col1:
         show_bar_chart(
             clean_grouped_users(df, "Rogues Processed"),
-            "Rogues Processed", "Users", "Rogues Processed by User", figsize=(6, 4)
+            "Rogues Processed", "Users", "Rogues Processed by User", figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
     with col2:
         show_bar_chart(
             clean_grouped_users(df, "Damaged Drawers Processed"),
-            "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User", figsize=(6, 4)
+            "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User", figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
     with col3:
         show_bar_chart(
             clean_grouped_users(df, "Damaged Products Processed"),
-            "Damaged Products Processed", "Users", "Damaged Products Processed by User", figsize=(6, 4)
+            "Damaged Products Processed", "Users", "Damaged Products Processed by User", figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
 
 with tab1:
