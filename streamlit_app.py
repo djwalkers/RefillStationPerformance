@@ -151,16 +151,20 @@ def get_current_week_and_month():
 
 current_week, current_month = get_current_week_and_month()
 
-def make_leaderboard(df, value_column):
+def clean_grouped_users(df, value_column):
     temp = (
         df.groupby("Users", as_index=False)[value_column]
         .sum()
-        .query(f"`{value_column}` != 0")
-        .sort_values(value_column, ascending=False)
     )
+    # Remove users that are blank, "0", or all zeros
+    temp = temp[(temp[value_column] != 0) & (temp["Users"].str.strip() != "") & (temp["Users"].str.strip() != "0")]
+    temp = temp.sort_values(value_column, ascending=False)
     return temp
 
 def show_bar_chart(df, x, y, title):
+    if df.empty:
+        st.info("No data to display for this selection.")
+        return
     fig, ax = plt.subplots(figsize=(max(7, len(df) * 0.45), 6))
     ax.bar(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     ax.set_ylabel(x.replace('_', ' '), color=FG_COLOR, weight="bold")
@@ -173,47 +177,6 @@ def show_bar_chart(df, x, y, title):
     plt.tight_layout()
     st.pyplot(fig)
 
-def show_all_leaderboards(df, tag):
-    st.subheader(f"Leaderboard: Carts Counted Per Hour by User ({tag})")
-    leaderboard = make_leaderboard(df, "Carts Counted Per Hour")
-    show_bar_chart(leaderboard, "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
-    st.dataframe(leaderboard, use_container_width=True)
-    st.download_button(
-        f"Download {tag} Leaderboard (Carts) as CSV",
-        leaderboard.to_csv(index=False),
-        f"{tag.lower()}_dashboard_leaderboard_carts.csv"
-    )
-    # Rogues Processed
-    st.subheader(f"Leaderboard: Rogues Processed by User ({tag})")
-    rogues = make_leaderboard(df, "Rogues Processed")
-    show_bar_chart(rogues, "Rogues Processed", "Users", "Rogues Processed by User")
-    st.dataframe(rogues, use_container_width=True)
-    st.download_button(
-        f"Download {tag} Leaderboard (Rogues) as CSV",
-        rogues.to_csv(index=False),
-        f"{tag.lower()}_dashboard_leaderboard_rogues.csv"
-    )
-    # Damaged Drawers
-    st.subheader(f"Leaderboard: Damaged Drawers Processed by User ({tag})")
-    drawers = make_leaderboard(df, "Damaged Drawers Processed")
-    show_bar_chart(drawers, "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
-    st.dataframe(drawers, use_container_width=True)
-    st.download_button(
-        f"Download {tag} Leaderboard (Damaged Drawers) as CSV",
-        drawers.to_csv(index=False),
-        f"{tag.lower()}_dashboard_leaderboard_drawers.csv"
-    )
-    # Damaged Products
-    st.subheader(f"Leaderboard: Damaged Products Processed by User ({tag})")
-    products = make_leaderboard(df, "Damaged Products Processed")
-    show_bar_chart(products, "Damaged Products Processed", "Users", "Damaged Products Processed by User")
-    st.dataframe(products, use_container_width=True)
-    st.download_button(
-        f"Download {tag} Leaderboard (Damaged Products) as CSV",
-        products.to_csv(index=False),
-        f"{tag.lower()}_dashboard_leaderboard_products.csv"
-    )
-
 tab1, tab2, tab3, tab4 = st.tabs([
     "Hourly Dashboard", 
     "Weekly Dashboard",
@@ -221,89 +184,81 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "Raw Data"
 ])
 
-with tab1:
-    st.header("Hourly Dashboard")
+def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
 
-    df = data.copy()
-    if "Month" in df.columns:
+    # Filters for month, date, time, station type
+    if month_filter and "Month" in df.columns:
         months = df["Month"].dropna().unique()
-        month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()), key="hour_month")
+        month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()), key=f"{tag}_month")
         if month_sel != "All":
             df = df[df["Month"] == month_sel]
             filter_cols.append(f"Month={month_sel}")
-    if "Date" in df.columns:
+    if week_filter and "Week" in df.columns:
+        weeks = df["Week"].dropna().unique()
+        weeks = sorted([str(int(w)) for w in weeks if pd.notnull(w)])
+        week_sel = st.selectbox("Select Week Number:", ["All"] + weeks, key=f"{tag}_week")
+        if week_sel != "All":
+            df = df[df["Week"].astype(str) == week_sel]
+            filter_cols.append(f"Week={week_sel}")
+    if time_filters and "Date" in df.columns:
         dates = df["Date"].dropna().unique()
         try:
             dates = pd.to_datetime(dates)
             dates = sorted(dates)
         except Exception:
             dates = sorted(dates.tolist())
-        date_sel = st.selectbox("Select Date:", ["All"] + [str(d)[:10] for d in dates], key="hour_date")
+        date_sel = st.selectbox("Select Date:", ["All"] + [str(d)[:10] for d in dates], key=f"{tag}_date")
         if date_sel != "All":
             df = df[df["Date"].astype(str).str[:10] == date_sel]
             filter_cols.append(f"Date={date_sel}")
-    if "Time" in df.columns:
+    if time_filters and "Time" in df.columns:
         times = df["Time"].dropna().unique()
         times = sorted([str(t) for t in times if t is not None])
-        time_sel = st.selectbox("Select Time:", ["All"] + times, key="hour_time")
+        time_sel = st.selectbox("Select Time:", ["All"] + times, key=f"{tag}_time")
         if time_sel != "All":
             df = df[df["Time"].astype(str) == time_sel]
             filter_cols.append(f"Time={time_sel}")
     if "Station Type" in df.columns:
         station_types = df["Station Type"].dropna().unique()
         station_types = sorted([str(t) for t in station_types])
-        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="hour_station")
+        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key=f"{tag}_station")
         if station_sel != "All":
             df = df[df["Station Type"].astype(str) == station_sel]
             filter_cols.append(f"Station Type={station_sel}")
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-    show_all_leaderboards(df, "Hourly")
+
+    # Bar Charts: Carts Counted, Rogues, Damaged Drawers, Damaged Products
+    st.subheader("Carts Counted Per Hour by User")
+    ccph = clean_grouped_users(df, "Carts Counted Per Hour")
+    show_bar_chart(ccph, "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
+    
+    st.subheader("Rogues Processed by User")
+    rogues = clean_grouped_users(df, "Rogues Processed")
+    show_bar_chart(rogues, "Rogues Processed", "Users", "Rogues Processed by User")
+    
+    st.subheader("Damaged Drawers Processed by User")
+    drawers = clean_grouped_users(df, "Damaged Drawers Processed")
+    show_bar_chart(drawers, "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
+    
+    st.subheader("Damaged Products Processed by User")
+    products = clean_grouped_users(df, "Damaged Products Processed")
+    show_bar_chart(products, "Damaged Products Processed", "Users", "Damaged Products Processed by User")
+
+with tab1:
+    st.header("Hourly Dashboard")
+    dashboard_tab(data.copy(), "hourly", time_filters=True, week_filter=False, month_filter=True)
 
 with tab2:
     st.header("Weekly Dashboard")
     st.markdown(f"**Current Week Number:** {current_week}")
-    filter_cols = []
-    df = data.copy()
-    if "Week" in df.columns:
-        weeks = df["Week"].dropna().unique()
-        weeks = sorted([str(int(w)) for w in weeks if pd.notnull(w)])
-        week_sel = st.selectbox("Select Week Number:", ["All"] + weeks, key="week_week")
-        if week_sel != "All":
-            df = df[df["Week"].astype(str) == week_sel]
-            filter_cols.append(f"Week={week_sel}")
-    if "Station Type" in df.columns:
-        station_types = df["Station Type"].dropna().unique()
-        station_types = sorted([str(t) for t in station_types])
-        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="week_station")
-        if station_sel != "All":
-            df = df[df["Station Type"].astype(str) == station_sel]
-            filter_cols.append(f"Station Type={station_sel}")
-    st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-    show_all_leaderboards(df, "Weekly")
+    dashboard_tab(data.copy(), "weekly", time_filters=False, week_filter=True, month_filter=False)
 
 with tab3:
     st.header("Monthly Dashboard")
     st.markdown(f"**Current Month:** {current_month}")
-    filter_cols = []
-    df = data.copy()
-    if "Month" in df.columns:
-        months = df["Month"].dropna().unique()
-        months = sorted(months.tolist())
-        month_sel = st.selectbox("Select Month:", ["All"] + months, key="month_month")
-        if month_sel != "All":
-            df = df[df["Month"] == month_sel]
-            filter_cols.append(f"Month={month_sel}")
-    if "Station Type" in df.columns:
-        station_types = df["Station Type"].dropna().unique()
-        station_types = sorted([str(t) for t in station_types])
-        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key="month_station")
-        if station_sel != "All":
-            df = df[df["Station Type"].astype(str) == station_sel]
-            filter_cols.append(f"Station Type={station_sel}")
-    st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-    show_all_leaderboards(df, "Monthly")
+    dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
 with tab4:
     st.header("Raw Data")
