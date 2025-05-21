@@ -64,6 +64,7 @@ if uploaded_file is not None:
             "(e.g., '14-02-2025 07-00.csv').\n\n"
             "Please rename your file and try again."
         )
+        st.stop()  # Prevent any further code from running!
     else:
         try:
             github_token = st.secrets["github_token"]
