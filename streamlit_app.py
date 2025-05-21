@@ -180,7 +180,7 @@ def clean_grouped_users(df, value_column):
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
-def show_bar_chart(df, x, y, title):
+def show_bar_chart(df, x, y, title, figsize=(10, 4)):
     if df.empty or x not in df.columns or y not in df.columns:
         st.info("No data to display for this selection.")
         return
@@ -198,7 +198,7 @@ def show_bar_chart(df, x, y, title):
     # Sort so largest value is at the top
     df = df.sort_values(by=x, ascending=True)
 
-    fig, ax = plt.subplots(figsize=(10, max(6, len(df) * 0.45)))
+    fig, ax = plt.subplots(figsize=figsize)
     bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     for bar in bars:
         width = bar.get_width()
@@ -270,10 +270,30 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
             filter_cols.append(f"Station Type={station_sel}")
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-    show_bar_chart(clean_grouped_users(df, "Carts Counted Per Hour"), "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
-    show_bar_chart(clean_grouped_users(df, "Rogues Processed"), "Rogues Processed", "Users", "Rogues Processed by User")
-    show_bar_chart(clean_grouped_users(df, "Damaged Drawers Processed"), "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
-    show_bar_chart(clean_grouped_users(df, "Damaged Products Processed"), "Damaged Products Processed", "Users", "Damaged Products Processed by User")
+
+    # Full-width main chart at the top
+    show_bar_chart(
+        clean_grouped_users(df, "Carts Counted Per Hour"),
+        "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User", figsize=(12, 5)
+    )
+
+    # Three charts in a single row below
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        show_bar_chart(
+            clean_grouped_users(df, "Rogues Processed"),
+            "Rogues Processed", "Users", "Rogues Processed by User", figsize=(6, 4)
+        )
+    with col2:
+        show_bar_chart(
+            clean_grouped_users(df, "Damaged Drawers Processed"),
+            "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User", figsize=(6, 4)
+        )
+    with col3:
+        show_bar_chart(
+            clean_grouped_users(df, "Damaged Products Processed"),
+            "Damaged Products Processed", "Users", "Damaged Products Processed by User", figsize=(6, 4)
+        )
 
 with tab1:
     st.header("Hourly Dashboard")
