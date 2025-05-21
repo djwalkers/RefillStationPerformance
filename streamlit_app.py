@@ -271,13 +271,13 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
 
-    # Full-width main chart at the top
+    # --- ROW 1: Full-width main chart ---
     show_bar_chart(
         clean_grouped_users(df, "Carts Counted Per Hour"),
         "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User", figsize=(12, 5)
     )
 
-    # Three charts in a single row below
+    # --- ROW 2: Three charts side by side below ---
     col1, col2, col3 = st.columns(3)
     with col1:
         show_bar_chart(
