@@ -1,12 +1,186 @@
-def show_bar_chart(df, x, y, title):
-    total = df[x].sum()
-    st.markdown(
-        f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {int(total):,}</div>",
-        unsafe_allow_html=True,
+
+import streamlit as st
+import pandas as pd
+import requests
+import matplotlib.pyplot as plt
+from urllib.parse import quote
+import re
+from datetime import datetime
+
+# ---- COLOR STYLES ----
+PRIMARY_COLOR = "#DA362C"
+BG_COLOR = "#DA362C"
+FG_COLOR = "#FFFFFF"
+AXIS_COLOR = "#333333"
+BAR_COLOR = "#FFFFFF"     # White bars
+BAR_EDGE = "#8B1A12"      # Dark red border
+
+st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
+
+# ---- Custom CSS for brand look
+st.markdown(f"""
+    <style>
+    .stApp {{
+        background-color: {BG_COLOR} !important;
+        color: {FG_COLOR};
+    }}
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {{
+        color: {FG_COLOR};
+    }}
+    .stButton > button {{
+        background-color: {PRIMARY_COLOR};
+        color: {FG_COLOR};
+        border: 1px solid {PRIMARY_COLOR};
+    }}
+    .stSelectbox, .stTextInput, .stDataFrame, .stTable {{
+        background-color: #fff;
+        color: {AXIS_COLOR};
+    }}
+    </style>
+""", unsafe_allow_html=True)
+
+# ---- SHOW LOGO ----
+logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/The%20Roc.png"
+st.image(logo_url, width=180)
+st.title("Refill Station Performance Dashboard")
+
+# --- CONFIG ---
+GITHUB_USER = "djwalkers"
+REPO_NAME = "RefillStationPerformance"
+DATA_FOLDER = "Data"
+FILES_FOLDER = "Files"
+
+# --- FILE URLS ---
+date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
+station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
+
+# --- 1. LOAD RAW DATA FILES FROM GITHUB ---
+@st.cache_data(show_spinner="Loading raw data from GitHub...")
+def load_raw_data():
+    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
+    files_api = requests.get(api_url).json()
+    data_files = [f['name'] for f in files_api if f['name'].endswith('.csv')]
+    dfs = []
+    for fname in data_files:
+        file_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{DATA_FOLDER}/{quote(fname)}"
+        try:
+            df = pd.read_csv(file_url)
+            df['Source.Name'] = fname
+            dfs.append(df)
+        except Exception as e:
+            st.warning(f"Error loading {fname}: {e}")
+    if dfs:
+        return pd.concat(dfs, ignore_index=True)
+    else:
+        return pd.DataFrame()
+
+# --- 2. LOAD DIMENSION TABLES ---
+@st.cache_data(show_spinner="Loading reference tables...")
+def load_reference_tables():
+    date_dim = pd.read_excel(date_dim_url, sheet_name=0)
+    station = pd.read_excel(station_url, sheet_name=0)
+    return date_dim, station
+
+raw_data = load_raw_data()
+date_dim, station = load_reference_tables()
+
+if raw_data.empty:
+    st.error("No data files found in the Data folder. Please check your GitHub repository.")
+    st.stop()
+
+# --- 3. DATA PROCESSING ---
+data = raw_data.copy()
+data = data.rename(columns={
+    'textBox9': 'Station Id',
+    'textBox10': 'User',
+    'textBox13': 'Drawers Counted',
+    'textBox17': 'Damaged Drawers Processed',
+    'textBox19': 'Damaged Products Processed',
+    'textBox21': 'Rogues Processed',
+})
+drop_cols = [
+    "textBox14", "textBox15", "textBox16", "textBox34", "textBox31", "textBox23",
+    "textBox24", "textBox25", "textBox26", "textBox28", "textBox29", "textBox30"
+]
+data = data.drop(columns=[c for c in drop_cols if c in data.columns], errors='ignore')
+
+# Parse Date and Time from filename
+data['Date'] = data['Source.Name'].str[:10]
+data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+def extract_time_from_filename(fname):
+    m = re.search(r"\s?(\d{2})-(\d{2})\.csv$", fname)
+    if m:
+        hour, minute = m.groups()
+        return f"{hour}:{minute}"
+    else:
+        try:
+            s = fname[11:16].replace("-", ":").strip()
+            return s if len(s) == 5 and ':' in s else None
+        except:
+            return None
+data['Time'] = data['Source.Name'].apply(extract_time_from_filename)
+data['Users'] = data['User'].astype(str).apply(lambda x: x.partition(' (')[0].replace('*','').strip())
+data = data.drop(columns=['User'])
+
+# Remove bad usernames before grouping
+data = data[
+    (data['Users'].astype(str).str.strip() != "") &
+    (data['Users'].astype(str).str.strip() != "0")
+]
+
+# Merge with Date Dimension
+if ('Date' in date_dim.columns) and all(x in date_dim.columns for x in ['Year', 'Month', 'Week']):
+    data = data.merge(date_dim[['Date', 'Year', 'Month', 'Week']], on='Date', how='left')
+if 'Station' in station.columns:
+    data = data.merge(station.rename(columns={'Station': 'Station Id'}), on='Station Id', how='left')
+elif 'Station Id' in station.columns:
+    data = data.merge(station, on='Station Id', how='left')
+data = data.rename(columns={
+    'Type': 'Station Type',
+    'Drawer Avg': 'Drawer Avg',
+    'KPI': 'Station KPI'
+})
+if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
+    data['Carts Counted Per Hour'] = (data['Drawers Counted'] / data['Drawer Avg']).round(2)
+else:
+    data['Carts Counted Per Hour'] = 0
+
+def get_current_week_and_month():
+    today = datetime.today()
+    week = today.isocalendar()[1]
+    month = today.strftime('%B')
+    return week, month
+current_week, current_month = get_current_week_and_month()
+
+def clean_grouped_users(df, value_column):
+    temp = (
+        df.groupby("Users", as_index=False)[value_column]
+        .sum()
     )
+    temp = temp[temp[value_column] != 0]
+    temp = temp.sort_values(value_column, ascending=False)
+    return temp
+
+def show_bar_chart(df, x, y, title):
+    if df.empty or x not in df.columns or y not in df.columns:
+        st.info("No data to display for this selection.")
+        return
+
+    # Ensure values are numeric and drop NAs and zeros
+    df = df[[y, x]].copy()
+    df[x] = pd.to_numeric(df[x], errors='coerce').fillna(0)
+    df = df[df[x] > 0]
+
     if df.empty:
         st.info("No data to display for this selection.")
         return
+
+    total = int(df[x].sum())
+    st.markdown(
+        f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total:,}</div>",
+        unsafe_allow_html=True,
+    )
+
     fig, ax = plt.subplots(figsize=(max(7, len(df) * 0.45), 6))
     bars = ax.bar(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     for bar in bars:
@@ -25,3 +199,75 @@ def show_bar_chart(df, x, y, title):
     ax.set_facecolor(BG_COLOR)
     plt.tight_layout()
     st.pyplot(fig)
+
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Hourly Dashboard", 
+    "Weekly Dashboard",
+    "Monthly Dashboard",
+    "Raw Data"
+])
+
+def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
+    filter_cols = []
+    if month_filter and "Month" in df.columns:
+        months = df["Month"].dropna().unique()
+        month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()), key=f"{tag}_month")
+        if month_sel != "All":
+            df = df[df["Month"] == month_sel]
+            filter_cols.append(f"Month={month_sel}")
+    if week_filter and "Week" in df.columns:
+        weeks = df["Week"].dropna().unique()
+        weeks = sorted([str(int(w)) for w in weeks if pd.notnull(w)])
+        week_sel = st.selectbox("Select Week Number:", ["All"] + weeks, key=f"{tag}_week")
+        if week_sel != "All":
+            df = df[df["Week"].astype(str) == week_sel]
+            filter_cols.append(f"Week={week_sel}")
+    if time_filters and "Date" in df.columns:
+        dates = df["Date"].dropna().unique()
+        try:
+            dates = pd.to_datetime(dates)
+            dates = sorted(dates)
+        except Exception:
+            dates = sorted(dates.tolist())
+        date_sel = st.selectbox("Select Date:", ["All"] + [str(d)[:10] for d in dates], key=f"{tag}_date")
+        if date_sel != "All":
+            df = df[df["Date"].astype(str).str[:10] == date_sel]
+            filter_cols.append(f"Date={date_sel}")
+    if time_filters and "Time" in df.columns:
+        times = df["Time"].dropna().unique()
+        times = sorted([str(t) for t in times if t is not None])
+        time_sel = st.selectbox("Select Time:", ["All"] + times, key=f"{tag}_time")
+        if time_sel != "All":
+            df = df[df["Time"].astype(str) == time_sel]
+            filter_cols.append(f"Time={time_sel}")
+    if "Station Type" in df.columns:
+        station_types = df["Station Type"].dropna().unique()
+        station_types = sorted([str(t) for t in station_types])
+        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key=f"{tag}_station")
+        if station_sel != "All":
+            df = df[df["Station Type"].astype(str) == station_sel]
+            filter_cols.append(f"Station Type={station_sel}")
+
+    st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
+    show_bar_chart(clean_grouped_users(df, "Carts Counted Per Hour"), "Carts Counted Per Hour", "Users", "Carts Counted Per Hour by User")
+    show_bar_chart(clean_grouped_users(df, "Rogues Processed"), "Rogues Processed", "Users", "Rogues Processed by User")
+    show_bar_chart(clean_grouped_users(df, "Damaged Drawers Processed"), "Damaged Drawers Processed", "Users", "Damaged Drawers Processed by User")
+    show_bar_chart(clean_grouped_users(df, "Damaged Products Processed"), "Damaged Products Processed", "Users", "Damaged Products Processed by User")
+
+with tab1:
+    st.header("Hourly Dashboard")
+    dashboard_tab(data.copy(), "hourly", time_filters=True, week_filter=False, month_filter=True)
+
+with tab2:
+    st.header("Weekly Dashboard")
+    st.markdown(f"**Current Week Number:** {current_week}")
+    dashboard_tab(data.copy(), "weekly", time_filters=False, week_filter=True, month_filter=False)
+
+with tab3:
+    st.header("Monthly Dashboard")
+    st.markdown(f"**Current Month:** {current_month}")
+    dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
+
+with tab4:
+    st.header("Raw Data")
+    st.dataframe(data, use_container_width=True)
