@@ -57,7 +57,17 @@ station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main
 @st.cache_data(show_spinner="Loading raw data from GitHub...")
 def load_raw_data():
     api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
-    files_api = requests.get(api_url).json()
+    response = requests.get(api_url)
+    try:
+        files_api = response.json()
+    except Exception:
+        st.error("Could not decode response from GitHub.")
+        return pd.DataFrame()
+    # Defensive: files_api should be a list. If not, it's probably an error.
+    if not isinstance(files_api, list):
+        msg = files_api.get('message', 'Unknown error')
+        st.error(f"Error loading file list from GitHub: {msg}")
+        return pd.DataFrame()
     data_files = [f['name'] for f in files_api if f['name'].endswith('.csv')]
     dfs = []
     for fname in data_files:
@@ -161,7 +171,9 @@ def clean_grouped_users(df, value_column):
         df.groupby("Users", as_index=False)[value_column]
         .sum()
     )
+    # Remove zeros, blanks, and NaNs from BOTH axis
     temp = temp[temp[value_column] != 0]
+    temp = temp[temp["Users"].astype(str).str.strip().replace("0", "").replace("", pd.NA).notna()]
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
@@ -174,6 +186,8 @@ def show_bar_chart(df, x, y, title):
     df = df[[y, x]].copy()
     df[x] = pd.to_numeric(df[x], errors='coerce').fillna(0)
     df = df[df[x] > 0]
+    df = df[df[y].astype(str).str.strip() != ""]
+    df = df[df[y].astype(str).str.strip() != "0"]
 
     if df.empty:
         st.info("No data to display for this selection.")
@@ -193,7 +207,7 @@ def show_bar_chart(df, x, y, title):
     for bar in bars:
         width = bar.get_width()
         if width > 0:
-            ax.annotate(f'{int(round(width))}', 
+            ax.annotate(f'{int(round(width))}',
                         xy=(width, bar.get_y() + bar.get_height() / 2),
                         xytext=(3, 0), textcoords="offset points",
                         ha='left', va='center', fontsize=12, color=FG_COLOR, fontweight="bold")
