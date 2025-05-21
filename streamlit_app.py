@@ -44,6 +44,11 @@ logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance
 st.image(logo_url, width=180)
 st.title("Refill Station Performance Dashboard")
 
+# ---- FILENAME VALIDATION ----
+def is_valid_filename(filename):
+    pattern = r"^\d{2}-\d{2}-\d{4} \d{2}-\d{2}\.csv$"
+    return bool(re.match(pattern, filename))
+
 # ---- Automated File Uploader (GitHub API) ----
 st.markdown("### Upload new data file to GitHub")
 uploaded_file = st.file_uploader(
@@ -53,42 +58,49 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    try:
-        github_token = st.secrets["github_token"]
-        repo = "djwalkers/RefillStationPerformance"
-        branch = "main"
-        upload_path = f"Data/{uploaded_file.name}"
+    if not is_valid_filename(uploaded_file.name):
+        st.error(
+            "❌ **Filename must be in the format 'DD-MM-YYYY HH-MM.csv'** "
+            "(e.g., '14-02-2025 07-00.csv').\n\n"
+            "Please rename your file and try again."
+        )
+    else:
+        try:
+            github_token = st.secrets["github_token"]
+            repo = "djwalkers/RefillStationPerformance"
+            branch = "main"
+            upload_path = f"Data/{uploaded_file.name}"
 
-        api_url = f"https://api.github.com/repos/{repo}/contents/{upload_path}"
+            api_url = f"https://api.github.com/repos/{repo}/contents/{upload_path}"
 
-        headers = {
-            "Authorization": f"Bearer {github_token}",
-            "Accept": "application/vnd.github.v3+json"
-        }
-        r = requests.get(api_url, headers=headers)
-        if r.status_code == 200 and "sha" in r.json():
-            sha = r.json()["sha"]
-        else:
-            sha = None
+            headers = {
+                "Authorization": f"Bearer {github_token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            r = requests.get(api_url, headers=headers)
+            if r.status_code == 200 and "sha" in r.json():
+                sha = r.json()["sha"]
+            else:
+                sha = None
 
-        content_base64 = base64.b64encode(uploaded_file.getvalue()).decode()
-        payload = {
-            "message": f"Upload {uploaded_file.name} via Streamlit",
-            "content": content_base64,
-            "branch": branch
-        }
-        if sha:
-            payload["sha"] = sha
+            content_base64 = base64.b64encode(uploaded_file.getvalue()).decode()
+            payload = {
+                "message": f"Upload {uploaded_file.name} via Streamlit",
+                "content": content_base64,
+                "branch": branch
+            }
+            if sha:
+                payload["sha"] = sha
 
-        put_response = requests.put(api_url, headers=headers, json=payload)
-        if put_response.status_code in [200, 201]:
-            st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
-            st.info("Refreshing dashboard to include the new data...")
-            st.rerun()
-        else:
-            st.error(f"GitHub upload failed: {put_response.json().get('message', put_response.text)}")
-    except Exception as ex:
-        st.error(f"Uploader failed: {ex}")
+            put_response = requests.put(api_url, headers=headers, json=payload)
+            if put_response.status_code in [200, 201]:
+                st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
+                st.info("Refreshing dashboard to include the new data...")
+                st.rerun()
+            else:
+                st.error(f"GitHub upload failed: {put_response.json().get('message', put_response.text)}")
+        except Exception as ex:
+            st.error(f"Uploader failed: {ex}")
 
 # --- CONFIG ---
 GITHUB_USER = "djwalkers"
@@ -161,7 +173,7 @@ data = data.drop(columns=[c for c in drop_cols if c in data.columns], errors='ig
 
 # Parse Date and Time from filename
 data['Date'] = data['Source.Name'].str[:10]
-data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+data['Date'] = pd.to_datetime(data['Date'], format='%d-%m-%Y', errors='coerce')
 def extract_time_from_filename(fname):
     m = re.search(r"\s?(\d{2})-(\d{2})\.csv$", fname)
     if m:
@@ -201,9 +213,9 @@ if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
     drawer_avg = pd.to_numeric(data['Drawer Avg'], errors='coerce').replace(0, pd.NA)
     data['Carts Counted Per Hour'] = (
         pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
-    ).fillna(0).round(2)
+    ).fillna(0).round(2).astype(float)
 else:
-    data['Carts Counted Per Hour'] = 0
+    data['Carts Counted Per Hour'] = 0.0
 
 def get_current_week_and_month():
     today = datetime.today()
