@@ -83,7 +83,8 @@ if uploaded_file is not None:
         put_response = requests.put(api_url, headers=headers, json=payload)
         if put_response.status_code in [200, 201]:
             st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
-            st.info("The dashboard will use the new file on next reload.")
+            st.info("Refreshing dashboard to include the new data...")
+            st.experimental_rerun()
         else:
             st.error(f"GitHub upload failed: {put_response.json().get('message', put_response.text)}")
     except Exception as ex:
