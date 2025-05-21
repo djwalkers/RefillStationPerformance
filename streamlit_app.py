@@ -141,9 +141,14 @@ data = data.rename(columns={
     'KPI': 'Station KPI'
 })
 if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
-    data['Carts Counted Per Hour'] = (data['Drawers Counted'] / data['Drawer Avg']).round(2)
+    # Replace 0 or NaN in Drawer Avg with np.nan to prevent division by zero
+    drawer_avg = pd.to_numeric(data['Drawer Avg'], errors='coerce').replace(0, pd.NA)
+    data['Carts Counted Per Hour'] = (
+        pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
+    ).fillna(0).round(2)
 else:
     data['Carts Counted Per Hour'] = 0
+
 
 def get_current_week_and_month():
     today = datetime.today()
