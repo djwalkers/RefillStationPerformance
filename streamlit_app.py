@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import base64
 import matplotlib.pyplot as plt
 from urllib.parse import quote
 import re
@@ -43,6 +44,51 @@ logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance
 st.image(logo_url, width=180)
 st.title("Refill Station Performance Dashboard")
 
+# ---- Automated File Uploader (GitHub API) ----
+st.markdown("### Upload new data file to GitHub")
+uploaded_file = st.file_uploader(
+    "Add a CSV file to be pushed directly to the GitHub Data folder.",
+    type="csv",
+    help="Uploads to the Data folder in the GitHub repo using the GitHub API."
+)
+
+if uploaded_file is not None:
+    try:
+        github_token = st.secrets["github_token"]
+        repo = "djwalkers/RefillStationPerformance"
+        branch = "main"
+        upload_path = f"Data/{uploaded_file.name}"
+
+        api_url = f"https://api.github.com/repos/{repo}/contents/{upload_path}"
+
+        headers = {
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        r = requests.get(api_url, headers=headers)
+        if r.status_code == 200 and "sha" in r.json():
+            sha = r.json()["sha"]
+        else:
+            sha = None
+
+        content_base64 = base64.b64encode(uploaded_file.getvalue()).decode()
+        payload = {
+            "message": f"Upload {uploaded_file.name} via Streamlit",
+            "content": content_base64,
+            "branch": branch
+        }
+        if sha:
+            payload["sha"] = sha
+
+        put_response = requests.put(api_url, headers=headers, json=payload)
+        if put_response.status_code in [200, 201]:
+            st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
+            st.info("The dashboard will use the new file on next reload.")
+        else:
+            st.error(f"GitHub upload failed: {put_response.json().get('message', put_response.text)}")
+    except Exception as ex:
+        st.error(f"Uploader failed: {ex}")
+
 # --- CONFIG ---
 GITHUB_USER = "djwalkers"
 REPO_NAME = "RefillStationPerformance"
@@ -63,7 +109,6 @@ def load_raw_data():
     except Exception:
         st.error("Could not decode response from GitHub.")
         return pd.DataFrame()
-    # Defensive: files_api should be a list. If not, it's probably an error.
     if not isinstance(files_api, list):
         msg = files_api.get('message', 'Unknown error')
         st.error(f"Error loading file list from GitHub: {msg}")
@@ -221,11 +266,11 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     plt.tight_layout()
     st.pyplot(fig)
 
-tab1, tab2, tab3, = st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "Hourly Dashboard", 
     "Weekly Dashboard",
-    "Monthly Dashboard",
-    ])
+    "Monthly Dashboard"
+])
 
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
@@ -337,4 +382,3 @@ with tab3:
     st.header("Monthly Dashboard")
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
-
