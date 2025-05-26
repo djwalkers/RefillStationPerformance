@@ -40,6 +40,24 @@ logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance
 st.image(logo_url, width=180)
 st.title("Refill Station Performance Dashboard")
 
+# ---- Sticky Tab Navigation ----
+tab_labels = [
+    "Hourly Dashboard", 
+    "Weekly Dashboard",
+    "Monthly Dashboard",
+    "Summary Tables"
+]
+if "active_tab" not in st.session_state:
+    st.session_state["active_tab"] = tab_labels[0]
+
+active_tab = st.selectbox(
+    "Navigation",
+    tab_labels,
+    index=tab_labels.index(st.session_state["active_tab"]),
+    key="main_tab"
+)
+st.session_state["active_tab"] = active_tab
+
 # ---- FILENAME VALIDATION ----
 def is_valid_filename(filename):
     pattern = r"^\d{2}-\d{2}-\d{4} \d{2}-\d{2}\.csv$"
@@ -273,14 +291,6 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     plt.tight_layout()
     st.pyplot(fig)
 
-# ---- DASHBOARD TABS ----
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Hourly Dashboard", 
-    "Weekly Dashboard",
-    "Monthly Dashboard",
-    "Summary Tables"
-])
-
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
     if month_filter and "Month" in df.columns:
@@ -377,22 +387,22 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
             "Damaged Products Processed", "Users", titles["products"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
         )
 
-with tab1:
+# --------- TABS IMPLEMENTATION ---------
+if active_tab == "Hourly Dashboard":
     st.header("Hourly Dashboard")
     dashboard_tab(data.copy(), "hourly", time_filters=True, week_filter=False, month_filter=True)
 
-with tab2:
+elif active_tab == "Weekly Dashboard":
     st.header("Weekly Dashboard")
     st.markdown(f"**Current Week Number:** {current_week}")
     dashboard_tab(data.copy(), "weekly", time_filters=False, week_filter=True, month_filter=False)
 
-with tab3:
+elif active_tab == "Monthly Dashboard":
     st.header("Monthly Dashboard")
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
-# ----- TAB 4: SUMMARY TABLES -----
-with tab4:
+elif active_tab == "Summary Tables":
     st.header("Summary Tables")
 
     # ---- Month and Day Filters ----
