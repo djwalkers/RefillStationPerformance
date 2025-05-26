@@ -18,22 +18,19 @@ BAR_EDGE = "#8B1A12"
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
 # ---- Custom CSS for brand look, filter headers in #DA362C ----
-st.markdown(f"""
+st.markdown("""
     <style>
-    .stApp {{
-        background-color: {BG_COLOR} !important;
-        color: {FG_COLOR};
-    }}
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {{
-        color: {FG_COLOR};
-    }}
-    /* Set selectbox/textinput labels to dashboard red */
-    label, .stSelectbox label, .stTextInput label {{
-        color: #DA362C !important;
+    label, .stSelectbox label, .stTextInput label {
+        color: #FFF !important;
+        background-color: #DA362C !important;
         font-weight: bold !important;
-    }}
+        padding: 4px 8px !important;
+        border-radius: 6px !important;
+        display: inline-block !important;
+    }
     </style>
 """, unsafe_allow_html=True)
+
 
 # ---- SHOW LOGO ----
 logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/The%20Roc.png"
