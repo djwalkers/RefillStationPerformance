@@ -42,7 +42,7 @@ tab_labels = [
     "Hourly Dashboard", 
     "Weekly Dashboard",
     "Monthly Dashboard",
-    "Summary Tables"
+    "High Performers"
 ]
 if "active_tab" not in st.session_state:
     st.session_state["active_tab"] = tab_labels[0]
@@ -127,8 +127,13 @@ station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main
 # --- 1. LOAD RAW DATA FILES FROM GITHUB ---
 @st.cache_data(show_spinner="Loading raw data from GitHub...")
 def load_raw_data():
-    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
-    response = requests.get(api_url)
+    github_token = st.secrets["github_token"]  # Same as your uploader
+headers = {
+    "Authorization": f"Bearer {github_token}",
+    "Accept": "application/vnd.github.v3+json"
+}
+response = requests.get(api_url, headers=headers)
+
     try:
         files_api = response.json()
     except Exception:
@@ -400,8 +405,8 @@ elif active_tab == "Monthly Dashboard":
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
-elif active_tab == "Summary Tables":
-    st.header("Summary Tables")
+elif active_tab == "High Performers":
+    st.header("High Performers")
 
     # ---- Month and Day Filters ----
     month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
