@@ -395,6 +395,18 @@ with tab3:
 with tab4:
     st.header("Summary Tables")
 
+    # ---- Month and Day Filters ----
+    month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
+    month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="summary_month")
+    filtered_data = data.copy()
+    if month_sel != "All":
+        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%B') == month_sel]
+
+    day_options = sorted(filtered_data['Date'].dt.strftime('%Y-%m-%d').dropna().unique())
+    day_sel = st.selectbox("Filter by Day:", ["All"] + day_options, key="summary_day")
+    if day_sel != "All":
+        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%Y-%m-%d') == day_sel]
+
     # Assign shift based on time
     def assign_shift(time_str):
         if pd.isna(time_str):
@@ -410,45 +422,54 @@ with tab4:
             return "PM"
         else:
             return "Night"
+    filtered_data['Shift'] = filtered_data['Time'].apply(assign_shift)
 
-    data['Shift'] = data['Time'].apply(assign_shift)
+    # Helper to ensure shift columns
+    def ensure_shift_columns(df, index_col="Date"):
+        for shift in ["AM", "PM", "Night"]:
+            if shift not in df.columns:
+                df[shift] = 0
+        cols = [index_col, "AM", "PM", "Night"]
+        df = df[[c for c in cols if c in df.columns]]
+        for shift in ["AM", "PM", "Night"]:
+            if shift in df.columns:
+                df[shift] = df[shift].fillna(0).astype(int)
+        return df
 
-    # Top Picker Per Day (with trophy emoji)
+    # Top Picker Per Day (with trophy emoji, date formatting, and no blank first column)
     trophy = "🏆 "
     top_picker_per_day = (
-        data.groupby(['Date', 'Users'], as_index=False)['Drawers Counted'].sum()
+        filtered_data.groupby(['Date', 'Users'], as_index=False)['Drawers Counted'].sum()
         .sort_values(['Date', 'Drawers Counted'], ascending=[True, False])
         .groupby('Date').first().reset_index()
         .rename(columns={'Users': 'Top Picker', 'Drawers Counted': 'Carts Picked'})
     )
-    top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
+    if not top_picker_per_day.empty:
+        top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%Y-%m-%d')
+        top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
     st.subheader("Top Picker Per Day")
-    st.dataframe(top_picker_per_day, use_container_width=True)
+    st.dataframe(top_picker_per_day, use_container_width=True, hide_index=True)
 
     # Total Carts Picked Per Shift (per day)
     carts_per_shift = (
-        data.groupby(['Date', 'Shift'], as_index=False)['Drawers Counted'].sum()
+        filtered_data.groupby(['Date', 'Shift'], as_index=False)['Drawers Counted'].sum()
         .rename(columns={'Drawers Counted': 'Carts Picked'})
         .pivot(index='Date', columns='Shift', values='Carts Picked')
         .reset_index()
     )
-    for shift in ["AM", "PM", "Night"]:
-        if shift not in carts_per_shift.columns:
-            carts_per_shift[shift] = 0
-    carts_per_shift = carts_per_shift[["Date", "AM", "PM", "Night"]]
+    carts_per_shift = ensure_shift_columns(carts_per_shift, index_col="Date")
+    if not carts_per_shift.empty:
+        carts_per_shift['Date'] = pd.to_datetime(carts_per_shift['Date']).dt.strftime('%Y-%m-%d')
     st.subheader("Total Carts Picked Per Shift (per day)")
-    st.dataframe(carts_per_shift.fillna(0).astype({'AM': int, 'PM': int, 'Night': int}), use_container_width=True)
+    st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
 
     # Breakdown by Station Type and Shift
     breakdown = (
-        data.groupby(['Station Type', 'Shift'], as_index=False)['Drawers Counted'].sum()
+        filtered_data.groupby(['Station Type', 'Shift'], as_index=False)['Drawers Counted'].sum()
         .rename(columns={'Drawers Counted': 'Carts Picked'})
         .pivot(index='Station Type', columns='Shift', values='Carts Picked')
         .reset_index()
     )
-    for shift in ["AM", "PM", "Night"]:
-        if shift not in breakdown.columns:
-            breakdown[shift] = 0
-    breakdown = breakdown[["Station Type", "AM", "PM", "Night"]]
+    breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
     st.subheader("Carts Picked by Station Type & Shift")
-    st.dataframe(breakdown.fillna(0).astype(float), use_container_width=True)
+    st.dataframe(breakdown, use_container_width=True, hide_index=True)
