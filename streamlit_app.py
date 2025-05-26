@@ -484,28 +484,21 @@ elif active_tab == "High Performers":
     st.subheader("Top Picker Per Shift (Carts Counted Per Hour)")
     st.dataframe(top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
 
-    # --- Total Carts Counted Per Hour Per Shift (per day) ---
-    carts_per_shift = (
-        filtered_data.groupby(['Date', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
-        .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
-        .pivot(index='Date', columns='Shift', values='Carts Counted')
-        .reset_index()
-    )
-    carts_per_shift = ensure_shift_columns(carts_per_shift, index_col="Date")
-    if not carts_per_shift.empty:
-        carts_per_shift['Date'] = pd.to_datetime(carts_per_shift['Date']).dt.strftime('%d-%m-%Y')
-    st.subheader("Total Carts Counted Per Hour Per Shift (per day)")
-    st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
-
     # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags) ---
-    # Normalize Station Type for robust filtering
     filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
     exclude_types = ["Atlas Box & Bond Bags"]
     exclude_types_lower = [t.lower() for t in exclude_types]
     filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
 
+    # Filter out NaN station types as well as excluded ones
+    filtered_data = filtered_data[
+        filtered_data['Station Type Lower'].notna() &
+        (filtered_data['Station Type Lower'] != 'nan') &
+        (~filtered_data['Station Type Lower'].isin(exclude_types_lower))
+    ]
+
     breakdown = (
-        filtered_data[~filtered_data['Station Type Lower'].isin(exclude_types_lower)]
+        filtered_data
         .groupby(['Station Type', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
         .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
         .pivot(index='Station Type', columns='Shift', values='Carts Counted')
@@ -514,3 +507,4 @@ elif active_tab == "High Performers":
     breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
     st.subheader("Carts Counted Per Hour by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
     st.dataframe(breakdown, use_container_width=True, hide_index=True)
+
