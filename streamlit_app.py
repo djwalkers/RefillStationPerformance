@@ -17,7 +17,7 @@ BAR_EDGE = "#8B1A12"
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
-# ---- Custom CSS for brand look
+# ---- Custom CSS for brand look, filter headers in #DA362C ----
 st.markdown(f"""
     <style>
     .stApp {{
@@ -27,14 +27,10 @@ st.markdown(f"""
     .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6 {{
         color: {FG_COLOR};
     }}
-    .stButton > button {{
-        background-color: {PRIMARY_COLOR};
-        color: {FG_COLOR};
-        border: 1px solid {PRIMARY_COLOR};
-    }}
-    .stSelectbox, .stTextInput, .stDataFrame, .stTable {{
-        background-color: #fff;
-        color: {AXIS_COLOR};
+    /* Set selectbox/textinput labels to dashboard red */
+    label, .stSelectbox label, .stTextInput label {{
+        color: #DA362C !important;
+        font-weight: bold !important;
     }}
     </style>
 """, unsafe_allow_html=True)
@@ -61,10 +57,10 @@ if uploaded_file is not None:
     if not is_valid_filename(uploaded_file.name):
         st.error(
             "❌ **Filename must be in the format 'DD-MM-YYYY HH-MM.csv'** "
-            "(e.g., '07-02-1983 08-00.csv').\n\n"
+            "(e.g., '14-02-2025 07-00.csv').\n\n"
             "Please rename your file and try again."
         )
-        st.stop()  # Prevent any further code from running!
+        st.stop()
     else:
         try:
             github_token = st.secrets["github_token"]
@@ -230,7 +226,6 @@ def clean_grouped_users(df, value_column):
         df.groupby("Users", as_index=False)[value_column]
         .sum()
     )
-    # Remove: zeros, blanks, '0', and NaN from BOTH axis
     temp = temp[
         (temp[value_column] > 0) &
         (temp["Users"].astype(str).str.strip() != "") &
@@ -254,9 +249,7 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
         unsafe_allow_html=True,
     )
 
-    # Sort so largest value is at the top
     df = df.sort_values(by=x, ascending=True)
-
     fig, ax = plt.subplots(figsize=figsize)
     bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     for bar in bars:
@@ -329,7 +322,6 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
 
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
 
-    # ---- Custom titles per tab ----
     if tag == "hourly":
         titles = {
             "main": "Carts Counted Per Hour",
