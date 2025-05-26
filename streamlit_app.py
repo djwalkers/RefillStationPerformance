@@ -8,7 +8,6 @@ from urllib.parse import quote
 import re
 from datetime import datetime
 
-# ---- COLOR STYLES ----
 PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
 FG_COLOR = "#FFFFFF"
@@ -18,7 +17,6 @@ BAR_EDGE = "#8B1A12"
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
-# ---- Custom CSS: page background + white filter headers ----
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .stApp {
@@ -35,7 +33,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ---- SHOW LOGO ----
 logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/The%20Roc.png"
 st.image(logo_url, width=180)
 st.title("Refill Station Performance Dashboard")
@@ -434,7 +431,6 @@ elif active_tab == "Summary Tables":
             return "Night"
     filtered_data['Shift'] = filtered_data['Time'].apply(assign_shift)
 
-    # Helper to ensure shift columns
     def ensure_shift_columns(df, index_col="Date"):
         for shift in ["AM", "PM", "Night"]:
             if shift not in df.columns:
@@ -446,21 +442,42 @@ elif active_tab == "Summary Tables":
                 df[shift] = df[shift].fillna(0).astype(int)
         return df
 
-    # Top Picker Per Day (with trophy emoji, date formatting, and no blank first column)
     trophy = "🏆 "
+
+    # --- Top Picker Per Day (using Carts Counted Per Hour) ---
     top_picker_per_day = (
-        filtered_data.groupby(['Date', 'Users'], as_index=False)['Drawers Counted'].sum()
-        .sort_values(['Date', 'Drawers Counted'], ascending=[True, False])
+        filtered_data.groupby(['Date', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
+        .sort_values(['Date', 'Carts Counted Per Hour'], ascending=[True, False])
         .groupby('Date').first().reset_index()
-        .rename(columns={'Users': 'Top Picker', 'Drawers Counted': 'Carts Picked'})
+        .rename(columns={'Users': 'Top Picker', 'Carts Counted Per Hour': 'Total Carts Counted Per Hour'})
     )
     if not top_picker_per_day.empty:
         top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%Y-%m-%d')
         top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
-    st.subheader("Top Picker Per Day")
+        # Format total (no decimals unless 0<value<1)
+        top_picker_per_day['Total Carts Counted Per Hour'] = top_picker_per_day['Total Carts Counted Per Hour'].apply(
+            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+        )
+    st.subheader("Top Picker Per Day (Carts Counted Per Hour)")
     st.dataframe(top_picker_per_day, use_container_width=True, hide_index=True)
 
-    # Total Carts Picked Per Shift (per day)
+    # --- Top Picker Per Shift (using Carts Counted Per Hour) ---
+    top_picker_per_shift = (
+        filtered_data.groupby(['Date', 'Shift', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
+        .sort_values(['Date', 'Shift', 'Carts Counted Per Hour'], ascending=[True, True, False])
+        .groupby(['Date', 'Shift']).first().reset_index()
+        .rename(columns={'Users': 'Top Picker', 'Carts Counted Per Hour': 'Total Carts Counted Per Hour'})
+    )
+    if not top_picker_per_shift.empty:
+        top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%Y-%m-%d')
+        top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
+        top_picker_per_shift['Total Carts Counted Per Hour'] = top_picker_per_shift['Total Carts Counted Per Hour'].apply(
+            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+        )
+    st.subheader("Top Picker Per Shift (Carts Counted Per Hour)")
+    st.dataframe(top_picker_per_shift, use_container_width=True, hide_index=True)
+
+    # --- Total Carts Picked Per Shift (per day)
     carts_per_shift = (
         filtered_data.groupby(['Date', 'Shift'], as_index=False)['Drawers Counted'].sum()
         .rename(columns={'Drawers Counted': 'Carts Picked'})
@@ -473,7 +490,7 @@ elif active_tab == "Summary Tables":
     st.subheader("Total Carts Picked Per Shift (per day)")
     st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
 
-    # Breakdown by Station Type and Shift
+    # --- Breakdown by Station Type and Shift
     breakdown = (
         filtered_data.groupby(['Station Type', 'Shift'], as_index=False)['Drawers Counted'].sum()
         .rename(columns={'Drawers Counted': 'Carts Picked'})
