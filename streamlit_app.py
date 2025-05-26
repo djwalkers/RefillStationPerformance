@@ -42,7 +42,7 @@ tab_labels = [
     "Hourly Dashboard", 
     "Weekly Dashboard",
     "Monthly Dashboard",
-    "High Performers"
+    "High Performers"      # <- renamed from "Summary Tables"
 ]
 if "active_tab" not in st.session_state:
     st.session_state["active_tab"] = tab_labels[0]
@@ -124,16 +124,16 @@ FILES_FOLDER = "Files"
 date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
 station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
 
-# --- 1. LOAD RAW DATA FILES FROM GITHUB ---
+# --- 1. LOAD RAW DATA FILES FROM GITHUB (AUTHENTICATED) ---
 @st.cache_data(show_spinner="Loading raw data from GitHub...")
 def load_raw_data():
-    github_token = st.secrets["github_token"]  # Same as your uploader
+    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
+    github_token = st.secrets["github_token"]
     headers = {
-      "Authorization": f"Bearer {github_token}",
-      "Accept": "application/vnd.github.v3+json"
-}
-response = requests.get(api_url, headers=headers)
-
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    response = requests.get(api_url, headers=headers)
     try:
         files_api = response.json()
     except Exception:
@@ -231,6 +231,8 @@ if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
     data['Carts Counted Per Hour'] = (
         pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
     ).fillna(0).round(2).astype(float)
+    # Silence future warning:
+    data = data.infer_objects(copy=False)
 else:
     data['Carts Counted Per Hour'] = 0.0
 
