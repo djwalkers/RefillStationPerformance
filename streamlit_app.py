@@ -128,9 +128,9 @@ station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main
 @st.cache_data(show_spinner="Loading raw data from GitHub...")
 def load_raw_data():
     github_token = st.secrets["github_token"]  # Same as your uploader
-headers = {
-    "Authorization": f"Bearer {github_token}",
-    "Accept": "application/vnd.github.v3+json"
+    headers = {
+      "Authorization": f"Bearer {github_token}",
+      "Accept": "application/vnd.github.v3+json"
 }
 response = requests.get(api_url, headers=headers)
 
