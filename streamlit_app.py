@@ -432,6 +432,10 @@ with tab4:
         .pivot(index='Date', columns='Shift', values='Carts Picked')
         .reset_index()
     )
+    for shift in ["AM", "PM", "Night"]:
+        if shift not in carts_per_shift.columns:
+            carts_per_shift[shift] = 0
+    carts_per_shift = carts_per_shift[["Date", "AM", "PM", "Night"]]
     st.subheader("Total Carts Picked Per Shift (per day)")
     st.dataframe(carts_per_shift.fillna(0).astype({'AM': int, 'PM': int, 'Night': int}), use_container_width=True)
 
@@ -442,5 +446,9 @@ with tab4:
         .pivot(index='Station Type', columns='Shift', values='Carts Picked')
         .reset_index()
     )
+    for shift in ["AM", "PM", "Night"]:
+        if shift not in breakdown.columns:
+            breakdown[shift] = 0
+    breakdown = breakdown[["Station Type", "AM", "PM", "Night"]]
     st.subheader("Carts Picked by Station Type & Shift")
     st.dataframe(breakdown.fillna(0).astype(float), use_container_width=True)
