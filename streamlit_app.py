@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import requests
 import base64
 import matplotlib.pyplot as plt
@@ -17,7 +18,7 @@ BAR_EDGE = "#8B1A12"
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
-# ---- Custom CSS for brand look, filter headers in #DA362C ----
+# ---- Custom CSS: page background + white filter headers ----
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .stApp {
@@ -272,10 +273,12 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     plt.tight_layout()
     st.pyplot(fig)
 
-tab1, tab2, tab3 = st.tabs([
+# ---- DASHBOARD TABS ----
+tab1, tab2, tab3, tab4 = st.tabs([
     "Hourly Dashboard", 
     "Weekly Dashboard",
-    "Monthly Dashboard"
+    "Monthly Dashboard",
+    "Summary Tables"
 ])
 
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
@@ -387,3 +390,57 @@ with tab3:
     st.header("Monthly Dashboard")
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
+
+# ----- TAB 4: SUMMARY TABLES -----
+with tab4:
+    st.header("Summary Tables")
+
+    # Assign shift based on time
+    def assign_shift(time_str):
+        if pd.isna(time_str):
+            return "Unknown"
+        try:
+            hour, minute = map(int, str(time_str).split(":"))
+        except:
+            return "Unknown"
+        total_minutes = hour * 60 + minute
+        if 6*60 <= total_minutes <= 14*60:
+            return "AM"
+        elif 14*60 < total_minutes <= 22*60:
+            return "PM"
+        else:
+            return "Night"
+
+    data['Shift'] = data['Time'].apply(assign_shift)
+
+    # Top Picker Per Day (with trophy emoji)
+    trophy = "🏆 "
+    top_picker_per_day = (
+        data.groupby(['Date', 'Users'], as_index=False)['Drawers Counted'].sum()
+        .sort_values(['Date', 'Drawers Counted'], ascending=[True, False])
+        .groupby('Date').first().reset_index()
+        .rename(columns={'Users': 'Top Picker', 'Drawers Counted': 'Carts Picked'})
+    )
+    top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
+    st.subheader("Top Picker Per Day")
+    st.dataframe(top_picker_per_day, use_container_width=True)
+
+    # Total Carts Picked Per Shift (per day)
+    carts_per_shift = (
+        data.groupby(['Date', 'Shift'], as_index=False)['Drawers Counted'].sum()
+        .rename(columns={'Drawers Counted': 'Carts Picked'})
+        .pivot(index='Date', columns='Shift', values='Carts Picked')
+        .reset_index()
+    )
+    st.subheader("Total Carts Picked Per Shift (per day)")
+    st.dataframe(carts_per_shift.fillna(0).astype({'AM': int, 'PM': int, 'Night': int}), use_container_width=True)
+
+    # Breakdown by Station Type and Shift
+    breakdown = (
+        data.groupby(['Station Type', 'Shift'], as_index=False)['Drawers Counted'].sum()
+        .rename(columns={'Drawers Counted': 'Carts Picked'})
+        .pivot(index='Station Type', columns='Shift', values='Carts Picked')
+        .reset_index()
+    )
+    st.subheader("Carts Picked by Station Type & Shift")
+    st.dataframe(breakdown.fillna(0).astype(float), use_container_width=True)
