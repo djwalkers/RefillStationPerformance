@@ -20,6 +20,9 @@ st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wi
 # ---- Custom CSS for brand look, filter headers in #DA362C ----
 st.markdown("""
     <style>
+    html, body, [data-testid="stAppViewContainer"], .stApp {
+        background-color: #DA362C !important;
+    }
     label, .stSelectbox label, .stTextInput label {
         color: #FFF !important;
         background-color: #DA362C !important;
@@ -30,7 +33,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
 
 # ---- SHOW LOGO ----
 logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/The%20Roc.png"
