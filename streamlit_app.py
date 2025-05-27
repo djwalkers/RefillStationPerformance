@@ -481,8 +481,13 @@ elif active_tab == "High Performers":
         top_picker_per_shift['Total Carts Counted Per Hour'] = top_picker_per_shift['Total Carts Counted Per Hour'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
+        # Set shift as categorical to enforce AM > PM > Night order
+        shift_order = ['AM', 'PM', 'Night']
+        top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
+        top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
     st.subheader("Top Picker Per Shift (Carts Counted Per Hour)")
     st.dataframe(top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
+
 
     # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags) ---
     filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
