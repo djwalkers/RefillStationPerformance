@@ -2,410 +2,323 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
-import base64
 import matplotlib.pyplot as plt
-from urllib.parse import quote
-import re
+import io
 from datetime import datetime
 
-PRIMARY_COLOR = "#DA362C"
-BG_COLOR = "#DA362C"
-FG_COLOR = "#FFFFFF"
-AXIS_COLOR = "#333333"
-BAR_COLOR = "#FFFFFF"
-BAR_EDGE = "#8B1A12"
+# ---- PAGE CONFIG ----
+st.set_page_config(
+    page_title="Refill Station Performance Dashboard",
+    layout="wide",
+    page_icon=":bar_chart:"
+)
 
-st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
-
-st.markdown("""
+# ---- COLOR SCHEME ----
+MAIN_COLOR = "#DA362C"
+WHITE = "#FFF"
+st.markdown(
+    f"""
     <style>
-    html, body, [data-testid="stAppViewContainer"], .stApp {
-        background-color: #DA362C !important;
-    }
-    label, .stSelectbox label, .stTextInput label {
-        color: #FFF !important;
-        background-color: #DA362C !important;
-        font-weight: bold !important;
-        padding: 4px 8px !important;
-        border-radius: 6px !important;
-        display: inline-block !important;
-    }
+    body, .stApp {{ background-color: {MAIN_COLOR} !important; }}
+    .block-container {{
+        padding-top: 1rem;
+    }}
+    .css-1aumxhk, .css-1v3fvcr, .st-bd, .st-bo, .st-bn {{
+        background-color: {MAIN_COLOR} !important;
+    }}
+    .stDataFrame .e1eexj620, .stDataFrame .e1eexj610 {{
+        color: {MAIN_COLOR};
+        font-weight: bold;
+    }}
+    .stTabs [data-baseweb="tab-list"] {{
+        background: {MAIN_COLOR};
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        color: {WHITE};
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: {MAIN_COLOR};
+        background: {WHITE};
+        border-radius: 10px 10px 0 0;
+    }}
+    .stSelectbox label, .st-mr, .stTextInput label, .stMarkdown {{
+        color: {MAIN_COLOR};
+        font-weight: bold;
+    }}
+    .st-bj, .st-bs, .st-cc, .st-ci {{
+        background: {WHITE} !important;
+        color: {MAIN_COLOR} !important;
+    }}
     </style>
-""", unsafe_allow_html=True)
-
-logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/The%20Roc.png"
-st.image(logo_url, width=180)
-st.title("Refill Station Performance Dashboard")
-
-# ---- Sticky Tab Navigation ----
-tab_labels = [
-    "Hourly Dashboard", 
-    "Weekly Dashboard",
-    "Monthly Dashboard",
-    "High Performers"
-]
-if "active_tab" not in st.session_state:
-    st.session_state["active_tab"] = tab_labels[0]
-
-active_tab = st.selectbox(
-    "Navigation",
-    tab_labels,
-    index=tab_labels.index(st.session_state["active_tab"]),
-    key="main_tab"
-)
-st.session_state["active_tab"] = active_tab
-
-# ---- FILENAME VALIDATION ----
-def is_valid_filename(filename):
-    pattern = r"^\d{2}-\d{2}-\d{4} \d{2}-\d{2}\.csv$"
-    return bool(re.match(pattern, filename))
-
-# ---- Automated File Uploader (GitHub API) ----
-st.markdown("### Upload new data file to GitHub")
-uploaded_file = st.file_uploader(
-    "Add a CSV file to be pushed directly to the GitHub Data folder.",
-    type="csv",
-    help="Uploads to the Data folder in the GitHub repo using the GitHub API."
+    """,
+    unsafe_allow_html=True,
 )
 
-if uploaded_file is not None:
-    if not is_valid_filename(uploaded_file.name):
-        st.error(
-            "❌ **Filename must be in the format 'DD-MM-YYYY HH-MM.csv'** "
-            "(e.g., '14-02-2025 07-00.csv').\n\n"
-            "Please rename your file and try again."
-        )
-        st.stop()
-    else:
-        try:
-            github_token = st.secrets["github_token"]
-            repo = "djwalkers/RefillStationPerformance"
-            branch = "main"
-            upload_path = f"Data/{uploaded_file.name}"
+# ---- LOGO ----
+st.image("The Roc.png", width=120)
 
-            api_url = f"https://api.github.com/repos/{repo}/contents/{upload_path}"
+# ---- GITHUB DATA ----
+DATA_FOLDER_URL = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/Data/"
+FILES_FOLDER_URL = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/Files/"
 
-            headers = {
-                "Authorization": f"Bearer {github_token}",
-                "Accept": "application/vnd.github.v3+json"
-            }
-            r = requests.get(api_url, headers=headers)
-            if r.status_code == 200 and "sha" in r.json():
-                sha = r.json()["sha"]
-            else:
-                sha = None
+def get_file_list_from_github(folder_url):
+    api_url = "https://api.github.com/repos/djwalkers/RefillStationPerformance/contents/Data"
+    response = requests.get(api_url)
+    files = []
+    if response.status_code == 200:
+        for file in response.json():
+            if file["name"].endswith(".csv"):
+                files.append(file["name"])
+    return sorted(files)
 
-            content_base64 = base64.b64encode(uploaded_file.getvalue()).decode()
-            payload = {
-                "message": f"Upload {uploaded_file.name} via Streamlit",
-                "content": content_base64,
-                "branch": branch
-            }
-            if sha:
-                payload["sha"] = sha
-
-            put_response = requests.put(api_url, headers=headers, json=payload)
-            if put_response.status_code in [200, 201]:
-                st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
-                st.info("Refreshing dashboard to include the new data...")
-                st.rerun()
-            else:
-                st.error(f"GitHub upload failed: {put_response.json().get('message', put_response.text)}")
-        except Exception as ex:
-            st.error(f"Uploader failed: {ex}")
-
-# --- CONFIG ---
-GITHUB_USER = "djwalkers"
-REPO_NAME = "RefillStationPerformance"
-DATA_FOLDER = "Data"
-FILES_FOLDER = "Files"
-
-# --- FILE URLS ---
-date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
-station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
-
-# --- 1. LOAD RAW DATA FILES FROM GITHUB (AUTHENTICATED) ---
-@st.cache_data(show_spinner="Loading raw data from GitHub...")
-def load_raw_data():
-    api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
-    github_token = st.secrets["github_token"]
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    response = requests.get(api_url, headers=headers)
-    try:
-        files_api = response.json()
-    except Exception:
-        st.error("Could not decode response from GitHub.")
-        return pd.DataFrame()
-    if not isinstance(files_api, list):
-        msg = files_api.get('message', 'Unknown error')
-        st.error(f"Error loading file list from GitHub: {msg}")
-        return pd.DataFrame()
-    data_files = [f['name'] for f in files_api if f['name'].endswith('.csv')]
+@st.cache_data(ttl=300)
+def load_data():
+    file_list = get_file_list_from_github(DATA_FOLDER_URL)
     dfs = []
-    for fname in data_files:
-        file_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{DATA_FOLDER}/{quote(fname)}"
+    for filename in file_list:
+        # Validate file name: dd-mm-yyyy hh-mm.csv (strict)
         try:
-            df = pd.read_csv(file_url)
-            df['Source.Name'] = fname
+            base = filename.replace(".csv", "")
+            dt = datetime.strptime(base, "%d-%m-%Y %H-%M")
+        except ValueError:
+            continue  # skip non-matching files
+        url = DATA_FOLDER_URL + filename.replace(" ", "%20")
+        try:
+            df = pd.read_csv(url)
+            df["Source.Name"] = filename.replace(".csv", "")
             dfs.append(df)
         except Exception as e:
-            st.warning(f"Error loading {fname}: {e}")
-    if dfs:
-        return pd.concat(dfs, ignore_index=True)
-    else:
+            st.warning(f"Error loading {filename}: {e}")
+    if not dfs:
         return pd.DataFrame()
-
-# --- 2. LOAD DIMENSION TABLES ---
-@st.cache_data(show_spinner="Loading reference tables...")
-def load_reference_tables():
-    date_dim = pd.read_excel(date_dim_url, sheet_name=0)
-    station = pd.read_excel(station_url, sheet_name=0)
-    return date_dim, station
-
-raw_data = load_raw_data()
-date_dim, station = load_reference_tables()
-
-if raw_data.empty:
-    st.error("No data files found in the Data folder. Please check your GitHub repository.")
-    st.stop()
-
-# --- 3. DATA PROCESSING ---
-data = raw_data.copy()
-data = data.rename(columns={
-    'textBox9': 'Station Id',
-    'textBox10': 'User',
-    'textBox13': 'Drawers Counted',
-    'textBox17': 'Damaged Drawers Processed',
-    'textBox19': 'Damaged Products Processed',
-    'textBox21': 'Rogues Processed',
-})
-drop_cols = [
-    "textBox14", "textBox15", "textBox16", "textBox34", "textBox31", "textBox23",
-    "textBox24", "textBox25", "textBox26", "textBox28", "textBox29", "textBox30"
-]
-data = data.drop(columns=[c for c in drop_cols if c in data.columns], errors='ignore')
-
-# Parse Date and Time from filename
-data['Date'] = data['Source.Name'].str[:10]
-data['Date'] = pd.to_datetime(data['Date'], format='%d-%m-%Y', errors='coerce')
-def extract_time_from_filename(fname):
-    m = re.search(r"\s?(\d{2})-(\d{2})\.csv$", fname)
-    if m:
-        hour, minute = m.groups()
-        return f"{hour}:{minute}"
-    else:
-        try:
-            s = fname[11:16].replace("-", ":").strip()
-            return s if len(s) == 5 and ':' in s else None
-        except:
-            return None
-data['Time'] = data['Source.Name'].apply(extract_time_from_filename)
-data['Users'] = data['User'].astype(str).apply(lambda x: x.partition(' (')[0].replace('*','').strip())
-data = data.drop(columns=['User'])
-
-# Remove bad usernames before grouping
-data = data[
-    (data['Users'].astype(str).str.strip() != "") &
-    (data['Users'].astype(str).str.strip() != "0")
-]
-
-# Merge with Date Dimension
-if ('Date' in date_dim.columns) and all(x in date_dim.columns for x in ['Year', 'Month', 'Week']):
-    data = data.merge(date_dim[['Date', 'Year', 'Month', 'Week']], on='Date', how='left')
-if 'Station' in station.columns:
-    data = data.merge(station.rename(columns={'Station': 'Station Id'}), on='Station Id', how='left')
-elif 'Station Id' in station.columns:
-    data = data.merge(station, on='Station Id', how='left')
-data = data.rename(columns={
-    'Type': 'Station Type',
-    'Drawer Avg': 'Drawer Avg',
-    'KPI': 'Station KPI'
-})
-
-# Safe calculation to avoid division by zero/infinity
-if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
-    drawer_avg = pd.to_numeric(data['Drawer Avg'], errors='coerce').replace(0, pd.NA)
-    data['Carts Counted Per Hour'] = (
-        pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
-    ).fillna(0).round(2).astype(float)
-    # Silence future warning:
-    data = data.infer_objects(copy=False)
-else:
-    data['Carts Counted Per Hour'] = 0.0
-
-def get_current_week_and_month():
-    today = datetime.today()
-    week = today.isocalendar()[1]
-    month = today.strftime('%B')
-    return week, month
-current_week, current_month = get_current_week_and_month()
-
-def clean_grouped_users(df, value_column):
-    temp = (
-        df.groupby("Users", as_index=False)[value_column]
-        .sum()
+    data = pd.concat(dfs, ignore_index=True)
+    # Clean and rename columns
+    rename_map = {
+        "textBox9": "Station Id", "textBox10": "User",
+        "textBox13": "Drawers Counted", "textBox17": "Damaged Drawers Processed",
+        "textBox19": "Damaged Products Processed", "textBox21": "Rogues Processed"
+    }
+    data = data.rename(columns=rename_map)
+    # Drop unwanted columns
+    drop_cols = [col for col in data.columns if col.startswith("textBox") and col not in rename_map]
+    data = data.drop(columns=drop_cols, errors="ignore")
+    # Fix User
+    data["Users"] = data["User"].astype(str).str.split(" (").str[0].str.replace("*", "").str.strip()
+    # Date and Time from filename
+    data["Date"] = data["Source.Name"].str[:10]
+    data["Time"] = data["Source.Name"].str[11:16].str.replace("-", ":")
+    data["Date"] = pd.to_datetime(data["Date"], format="%d-%m-%Y", errors="coerce")
+    data["Time"] = data["Time"].replace("nan", np.nan)
+    # Remove null/empty users
+    data = data[data["Users"].notna() & (data["Users"] != "")]
+    # More cleaning
+    for col in ["Drawers Counted", "Damaged Drawers Processed", "Damaged Products Processed", "Rogues Processed"]:
+        data[col] = pd.to_numeric(data[col], errors="coerce").fillna(0).astype(int)
+    # ---- Load Reference Tables ----
+    # Date Dimension
+    date_dim_url = FILES_FOLDER_URL + "Date%20Dimension%20Table.xlsx"
+    date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
+    date_dim["Date"] = pd.to_datetime(date_dim["Date"])
+    # Station Table
+    station_url = FILES_FOLDER_URL + "Station%20Standard.xlsx"
+    station = pd.read_excel(station_url, sheet_name="Station")
+    # Merge Date Dim
+    data = pd.merge(data, date_dim[["Date", "Year", "Month", "Week"]], on="Date", how="left")
+    # Merge Station Info
+    data = pd.merge(data, station[["Station", "Type", "Drawer Avg", "KPI"]], left_on="Station Id", right_on="Station", how="left")
+    data = data.rename(columns={
+        "Type": "Station Type",
+        "Drawer Avg": "Drawer Avg",
+        "KPI": "Station KPI"
+    })
+    # Carts Counted Per Hour calculation
+    data["Carts Counted Per Hour"] = np.where(
+        data["Drawer Avg"].fillna(0) > 0,
+        np.round(data["Drawers Counted"] / data["Drawer Avg"], 2),
+        0
     )
-    temp = temp[
-        (temp[value_column] > 0) &
-        (temp["Users"].astype(str).str.strip() != "") &
-        (temp["Users"].astype(str).str.strip() != "0")
+    # Remove excluded users
+    excluded_users = [
+        "AARON DAVIES", "ADAM DAVENHILL", "ANDY WALKER", "ANNA DZIEDZIC-WIDZICKA", "BEN NORBURY",
+        "CHARLOTTE BIBBY", "DANIEL ROGERSON", "DOMINIC PASKIN", "GEORGE SMITH", "JEFFERY FLETCHER",
+        "MARCIN SZABLINSKI", "MARCOS CHAINIUK", "MARK BANHAM", "MAUREEN OUGHTON", "MAX CHAPPEL",
+        "MICHAEL RUSHTON", "MICHAL ROWDO", "PIETER DAVIDS", "ROGER COULSON", "ROXANNE HAYNES",
+        "SAM BENNETT", "STUART FOWLES", "TAMMY HITCHMOUGH", "TAYLOR MADDOCK", "TAYLOR MADDOX", "VASELA VELKOVA"
     ]
-    temp = temp.sort_values(value_column, ascending=False)
-    return temp
+    data = data[~data["Users"].isin(excluded_users)]
+    data = data.reset_index(drop=True)
+    return data
 
-def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11):
-    if df.empty or x not in df.columns or y not in df.columns:
-        st.info("No data to display for this selection.")
-        return
+data = load_data()
 
-    total = df[x].sum()
-    if 0 < total < 1:
-        total_label = f"{total:.2f}"
-    else:
-        total_label = f"{int(round(total))}"
+# ---- UPLOAD SECTION ----
+with st.sidebar:
+    st.header("Upload New Data File")
+    uploaded = st.file_uploader("Upload CSV file", type=["csv"])
+    upload_message = ""
+    if uploaded is not None:
+        # Filename validation: dd-mm-yyyy hh-mm.csv
+        filename = uploaded.name
+        try:
+            datetime.strptime(filename.replace(".csv", ""), "%d-%m-%Y %H-%M")
+            is_valid = True
+        except ValueError:
+            is_valid = False
+        if not is_valid:
+            st.error("❌ Filename must be in format: DD-MM-YYYY HH-MM.csv")
+        else:
+            # -- You'd put your upload-to-GitHub logic here if using API --
+            st.success("✅ File accepted. (Note: Actual upload requires GitHub API integration)")
+            st.info("Please manually add the file to your GitHub Data folder for now.")
+    st.markdown("---")
     st.markdown(
-        f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total_label}</div>",
-        unsafe_allow_html=True,
+        "<div style='color: #FFF; background: #DA362C; border-radius: 4px; padding: 8px; font-size: 15px; text-align: center;'>"
+        "<b>Refill Station Performance Report</b></div>",
+        unsafe_allow_html=True
     )
 
-    df = df.sort_values(by=x, ascending=True)
-    fig, ax = plt.subplots(figsize=figsize)
-    bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
-    for bar in bars:
-        width = bar.get_width()
-        if width > 0:
-            if 0 < width < 1:
-                label = f"{width:.2f}"
-            else:
-                label = f"{int(round(width))}"
-            ax.annotate(label,
-                        xy=(width, bar.get_y() + bar.get_height() / 2),
-                        xytext=(3, 0), textcoords="offset points",
-                        ha='left', va='center', fontsize=label_fontsize, color=FG_COLOR, fontweight="bold")
-    ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
-    ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
-    ax.set_title(title, color=FG_COLOR, weight="bold", fontsize=axis_fontsize+1)
-    ax.tick_params(axis='y', colors=FG_COLOR, labelsize=label_fontsize-1)
-    ax.tick_params(axis='x', colors=FG_COLOR, labelsize=label_fontsize)
-    fig.patch.set_facecolor(BG_COLOR)
-    ax.set_facecolor(BG_COLOR)
+# ---- TAB NAVIGATION ----
+tabs = ["Hourly Dashboard", "Weekly Dashboard", "Monthly Dashboard", "High Performers"]
+active_tab = st.selectbox("Select Dashboard Tab", tabs, key="main_tabs")
+
+# ---- DASHBOARD FUNCTIONS ----
+def assign_shift(time_str):
+    if pd.isna(time_str):
+        return "Unknown"
+    try:
+        hour, minute = map(int, str(time_str).split(":"))
+    except:
+        return "Unknown"
+    total_minutes = hour * 60 + minute
+    if 6*60 <= total_minutes <= 14*60:
+        return "AM"
+    elif 14*60 < total_minutes <= 22*60:
+        return "PM"
+    else:
+        return "Night"
+
+def dashboard_tab(df, period="hourly", **filter_args):
+    df = df.copy()
+    # ---- Filters ----
+    filter_cols = st.columns([1, 1, 1, 1])
+    with filter_cols[0]:
+        month_options = sorted(df['Month'].dropna().unique(), key=lambda x: str(x))
+        month_sel = st.selectbox("Month", ["All"] + month_options, key=f"{period}_month")
+    with filter_cols[1]:
+        week_options = sorted(df['Week'].dropna().unique())
+        week_sel = st.selectbox("Week", ["All"] + [str(w) for w in week_options], key=f"{period}_week")
+    with filter_cols[2]:
+        date_options = sorted(df['Date'].dt.strftime('%d-%m-%Y').dropna().unique())
+        date_sel = st.selectbox("Date", ["All"] + date_options, key=f"{period}_date")
+    with filter_cols[3]:
+        station_type_options = sorted(df['Station Type'].dropna().astype(str).unique())
+        station_type_sel = st.selectbox("Station Type", ["All"] + station_type_options, key=f"{period}_station_type")
+    # Apply filters
+    if month_sel != "All":
+        df = df[df['Month'] == month_sel]
+    if week_sel != "All":
+        df = df[df['Week'].astype(str) == week_sel]
+    if date_sel != "All":
+        df = df[df['Date'].dt.strftime('%d-%m-%Y') == date_sel]
+    if station_type_sel != "All":
+        df = df[df['Station Type'] == station_type_sel]
+    # Assign shift for breakdowns
+    df['Shift'] = df['Time'].apply(assign_shift)
+
+    # ---- Layout: 1 chart full width, 3 charts below ----
+    st.markdown("### Carts Counted Per Hour")
+    fig, ax = plt.subplots(figsize=(14, 4.5))
+    agg = (
+        df.groupby('Users', as_index=False)['Carts Counted Per Hour'].sum()
+        .query("`Carts Counted Per Hour` > 0")
+        .sort_values('Carts Counted Per Hour', ascending=True)
+    )
+    ax.barh(agg['Users'], agg['Carts Counted Per Hour'], color=MAIN_COLOR, edgecolor=WHITE)
+    for i, v in enumerate(agg['Carts Counted Per Hour']):
+        val_str = f"{v:.2f}" if 0 < v < 1 else f"{int(round(v))}"
+        ax.text(v + 0.05, i, val_str, color=WHITE, va='center', fontsize=11, fontweight='bold')
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_yticklabels(agg['Users'], fontsize=10)
+    ax.set_facecolor(WHITE)
+    ax.tick_params(axis='x', colors=MAIN_COLOR)
+    ax.tick_params(axis='y', colors=MAIN_COLOR)
     plt.tight_layout()
     st.pyplot(fig)
 
-def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
-    filter_cols = []
-    if month_filter and "Month" in df.columns:
-        months = df["Month"].dropna().unique()
-        month_sel = st.selectbox("Select Month:", ["All"] + sorted(months.tolist()), key=f"{tag}_month")
-        if month_sel != "All":
-            df = df[df["Month"] == month_sel]
-            filter_cols.append(f"Month={month_sel}")
-    if week_filter and "Week" in df.columns:
-        weeks = df["Week"].dropna().unique()
-        weeks = sorted([str(int(w)) for w in weeks if pd.notnull(w)])
-        week_sel = st.selectbox("Select Week Number:", ["All"] + weeks, key=f"{tag}_week")
-        if week_sel != "All":
-            df = df[df["Week"].astype(str) == week_sel]
-            filter_cols.append(f"Week={week_sel}")
-    if time_filters and "Date" in df.columns:
-        # ----- DD-MM-YYYY formatting for date filters -----
-        dates = df["Date"].dropna().unique()
-        try:
-            dates_dt = pd.to_datetime(dates)
-            dates_fmt = [d.strftime('%d-%m-%Y') for d in sorted(dates_dt)]
-        except Exception:
-            dates_fmt = [str(d)[:10] for d in sorted(dates.tolist())]
-        date_sel = st.selectbox("Select Date:", ["All"] + dates_fmt, key=f"{tag}_date")
-        if date_sel != "All":
-            df = df[df["Date"].dt.strftime('%d-%m-%Y') == date_sel]
-            filter_cols.append(f"Date={date_sel}")
-    if time_filters and "Time" in df.columns:
-        times = df["Time"].dropna().unique()
-        times = sorted([str(t) for t in times if t is not None])
-        time_sel = st.selectbox("Select Time:", ["All"] + times, key=f"{tag}_time")
-        if time_sel != "All":
-            df = df[df["Time"].astype(str) == time_sel]
-            filter_cols.append(f"Time={time_sel}")
-    if "Station Type" in df.columns:
-        station_types = df["Station Type"].dropna().unique()
-        station_types = sorted([str(t) for t in station_types])
-        station_sel = st.selectbox("Select Station Type:", ["All"] + station_types, key=f"{tag}_station")
-        if station_sel != "All":
-            df = df[df["Station Type"].astype(str) == station_sel]
-            filter_cols.append(f"Station Type={station_sel}")
-
-    st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-
-    if tag == "hourly":
-        titles = {
-            "main": "Carts Counted Per Hour",
-            "rogues": "Rogues Processed",
-            "drawers": "Damaged Drawers Processed",
-            "products": "Damaged Products Processed",
-        }
-    elif tag == "weekly":
-        titles = {
-            "main": "Carts Counted Per Week",
-            "rogues": "Rogues Processed",
-            "drawers": "Damaged Drawers Processed",
-            "products": "Damaged Products Processed",
-        }
-    elif tag == "monthly":
-        titles = {
-            "main": "Carts Counted Per Month",
-            "rogues": "Rogues Processed",
-            "drawers": "Damaged Drawers Processed",
-            "products": "Damaged Products Processed",
-        }
-    else:
-        titles = {
-            "main": "Carts Counted Per Hour by User",
-            "rogues": "Rogues Processed by User",
-            "drawers": "Damaged Drawers Processed by User",
-            "products": "Damaged Products Processed by User",
-        }
-
-    # --- ROW 1: Full-width main chart ---
-    show_bar_chart(
-        clean_grouped_users(df, "Carts Counted Per Hour"),
-        "Carts Counted Per Hour", "Users", titles["main"], figsize=(14, 6), label_fontsize=11, axis_fontsize=12
-    )
-
-    # --- ROW 2: Three charts side by side below ---
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        show_bar_chart(
-            clean_grouped_users(df, "Rogues Processed"),
-            "Rogues Processed", "Users", titles["rogues"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
+    # ---- 3 charts below in columns ----
+    cols = st.columns(3)
+    # Rogues Processed
+    with cols[0]:
+        st.markdown("#### Rogues Processed")
+        fig1, ax1 = plt.subplots(figsize=(5, 3.5))
+        rogues = (
+            df.groupby('Users', as_index=False)['Rogues Processed'].sum()
+            .query("`Rogues Processed` > 0")
+            .sort_values('Rogues Processed', ascending=True)
         )
-    with col2:
-        show_bar_chart(
-            clean_grouped_users(df, "Damaged Drawers Processed"),
-            "Damaged Drawers Processed", "Users", titles["drawers"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
+        ax1.barh(rogues['Users'], rogues['Rogues Processed'], color=MAIN_COLOR, edgecolor=WHITE)
+        for i, v in enumerate(rogues['Rogues Processed']):
+            ax1.text(v + 0.05, i, int(v), color=WHITE, va='center', fontsize=11, fontweight='bold')
+        ax1.set_yticklabels(rogues['Users'], fontsize=9)
+        ax1.set_facecolor(WHITE)
+        ax1.tick_params(axis='x', colors=MAIN_COLOR)
+        ax1.tick_params(axis='y', colors=MAIN_COLOR)
+        plt.tight_layout()
+        st.pyplot(fig1)
+    # Damaged Drawers Processed
+    with cols[1]:
+        st.markdown("#### Damaged Drawers")
+        fig2, ax2 = plt.subplots(figsize=(5, 3.5))
+        damaged = (
+            df.groupby('Users', as_index=False)['Damaged Drawers Processed'].sum()
+            .query("`Damaged Drawers Processed` > 0")
+            .sort_values('Damaged Drawers Processed', ascending=True)
         )
-    with col3:
-        show_bar_chart(
-            clean_grouped_users(df, "Damaged Products Processed"),
-            "Damaged Products Processed", "Users", titles["products"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
+        ax2.barh(damaged['Users'], damaged['Damaged Drawers Processed'], color=MAIN_COLOR, edgecolor=WHITE)
+        for i, v in enumerate(damaged['Damaged Drawers Processed']):
+            ax2.text(v + 0.05, i, int(v), color=WHITE, va='center', fontsize=11, fontweight='bold')
+        ax2.set_yticklabels(damaged['Users'], fontsize=9)
+        ax2.set_facecolor(WHITE)
+        ax2.tick_params(axis='x', colors=MAIN_COLOR)
+        ax2.tick_params(axis='y', colors=MAIN_COLOR)
+        plt.tight_layout()
+        st.pyplot(fig2)
+    # Damaged Products Processed
+    with cols[2]:
+        st.markdown("#### Damaged Products")
+        fig3, ax3 = plt.subplots(figsize=(5, 3.5))
+        damaged_p = (
+            df.groupby('Users', as_index=False)['Damaged Products Processed'].sum()
+            .query("`Damaged Products Processed` > 0")
+            .sort_values('Damaged Products Processed', ascending=True)
         )
+        ax3.barh(damaged_p['Users'], damaged_p['Damaged Products Processed'], color=MAIN_COLOR, edgecolor=WHITE)
+        for i, v in enumerate(damaged_p['Damaged Products Processed']):
+            ax3.text(v + 0.05, i, int(v), color=WHITE, va='center', fontsize=11, fontweight='bold')
+        ax3.set_yticklabels(damaged_p['Users'], fontsize=9)
+        ax3.set_facecolor(WHITE)
+        ax3.tick_params(axis='x', colors=MAIN_COLOR)
+        ax3.tick_params(axis='y', colors=MAIN_COLOR)
+        plt.tight_layout()
+        st.pyplot(fig3)
 
-# --------- TABS IMPLEMENTATION ---------
+# ---- DASHBOARD TABS ----
 if active_tab == "Hourly Dashboard":
     st.header("Hourly Dashboard")
-    dashboard_tab(data.copy(), "hourly", time_filters=True, week_filter=False, month_filter=True)
+    dashboard_tab(data.copy(), "hourly")
 
 elif active_tab == "Weekly Dashboard":
     st.header("Weekly Dashboard")
-    st.markdown(f"**Current Week Number:** {current_week}")
-    dashboard_tab(data.copy(), "weekly", time_filters=False, week_filter=True, month_filter=False)
+    current_week = data["Week"].dropna().max()
+    st.markdown(f"**Current Week:** {current_week}")
+    dashboard_tab(data.copy(), "weekly")
 
 elif active_tab == "Monthly Dashboard":
     st.header("Monthly Dashboard")
+    current_month = data["Month"].dropna().astype(str).max()
     st.markdown(f"**Current Month:** {current_month}")
-    dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
+    dashboard_tab(data.copy(), "monthly")
 
 elif active_tab == "High Performers":
     st.header("High Performers")
@@ -423,20 +336,6 @@ elif active_tab == "High Performers":
         filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%d-%m-%Y') == day_sel]
 
     # Assign shift based on time
-    def assign_shift(time_str):
-        if pd.isna(time_str):
-            return "Unknown"
-        try:
-            hour, minute = map(int, str(time_str).split(":"))
-        except:
-            return "Unknown"
-        total_minutes = hour * 60 + minute
-        if 6*60 <= total_minutes <= 14*60:
-            return "AM"
-        elif 14*60 < total_minutes <= 22*60:
-            return "PM"
-        else:
-            return "Night"
     filtered_data['Shift'] = filtered_data['Time'].apply(assign_shift)
 
     def ensure_shift_columns(df, index_col="Date"):
@@ -452,69 +351,132 @@ elif active_tab == "High Performers":
 
     trophy = "🏆 "
 
-    # --- Top Picker Per Day (Carts Counted Per Hour) with Station Type ---
-    top_carts_day = (
-        filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+    # --- Top Picker Per Day (Carts Counted Per Hour) with Station Type & DRILLDOWN ---
+    daily_totals = (
+        filtered_data.groupby(['Date', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    idx = top_carts_day.groupby('Date')['Carts Counted Per Hour'].idxmax()
-    top_picker_per_day = top_carts_day.loc[idx].reset_index(drop=True)
-    top_picker_per_day = top_picker_per_day.rename(columns={'Users': 'Top Picker', 'Carts Counted Per Hour': 'Total Carts Counted Per Hour'})
+    idx = daily_totals.groupby('Date')['Carts Counted Per Hour'].idxmax()
+    top_picker_per_day = daily_totals.loc[idx].reset_index(drop=True)
+    top_picker_per_day = top_picker_per_day.rename(
+        columns={'Users': 'Top Picker', 'Carts Counted Per Hour': 'Total Carts Counted Per Hour'}
+    )
+    # Get main station type for the day
+    main_station = (
+        filtered_data.groupby(['Date', 'Top Picker', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+    )
+    main_station_idx = main_station.groupby(['Date', 'Top Picker'])['Carts Counted Per Hour'].idxmax()
+    main_station = main_station.loc[main_station_idx][['Date', 'Top Picker', 'Station Type']]
+    top_picker_per_day = top_picker_per_day.merge(
+        main_station,
+        left_on=['Date', 'Top Picker'],
+        right_on=['Date', 'Top Picker'],
+        how='left'
+    )
+
     if not top_picker_per_day.empty:
         top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
         top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
         top_picker_per_day['Total Carts Counted Per Hour'] = top_picker_per_day['Total Carts Counted Per Hour'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
-    st.subheader("Top Picker Per Day")
+    st.subheader("Top Picker Per Day (All Hours, Calendar Day)")
     st.markdown(
-        "*Note: This table sums all picks by each user within the full calendar day, regardless of shift. "
+        "*Note: This table sums all picks by each user within the full calendar day, regardless of shift boundaries. "
         "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift times.*",
         unsafe_allow_html=True,
     )
-    st.dataframe(top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
+    # ---- Drilldown Implementation ----
+    top_picker_per_day_display = top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']].reset_index(drop=True)
+    st.dataframe(
+        top_picker_per_day_display,
+        use_container_width=True,
+        hide_index=True,
+        selection_mode="single",
+        key="top_picker_per_day_df"
+    )
+    selected_row = st.session_state.get("top_picker_per_day_df_selected_rows", [])
+    if selected_row:
+        row = top_picker_per_day_display.iloc[selected_row[0]]
+        selected_date = row["Date"]
+        selected_user = row["Top Picker"].replace(trophy, "")  # Remove trophy emoji
 
-    # --- Top Picker Per Shift (Carts Counted Per Hour) with Station Type ---
-    top_carts_shift = (
+        # Pull raw details for this user/date from your main DataFrame
+        detail_df = data[
+            (data["Date"].dt.strftime('%d-%m-%Y') == selected_date) &
+            (data["Users"] == selected_user)
+        ].copy()
+        if not detail_df.empty:
+            detail_df['Date'] = pd.to_datetime(detail_df['Date']).dt.strftime('%d-%m-%Y')
+            detail_df['Carts Counted Per Hour'] = detail_df['Carts Counted Per Hour'].apply(
+                lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+            )
+            detail_df = detail_df[[
+                "Date", "Users", "Station Type", "Shift", "Time",
+                "Drawers Counted", "Damaged Drawers Processed", "Damaged Products Processed",
+                "Rogues Processed", "Carts Counted Per Hour"
+            ]]
+            st.markdown(f"#### Drilldown: Details for {selected_user} on {selected_date}")
+            st.dataframe(detail_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No additional details available for this selection.")
+
+    # --- Top Picker Per Shift (Carts Counted Per Hour) ---
+    shift_totals = (
         filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
-    top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
-    top_picker_per_shift = top_picker_per_shift.rename(columns={'Users': 'Top Picker', 'Carts Counted Per Hour': 'Total Carts Counted Per Hour'})
+    idx = shift_totals.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
+    top_picker_per_shift = shift_totals.loc[idx].reset_index(drop=True)
+    shift_order = ['AM', 'PM', 'Night']
+    top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
+    top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
     if not top_picker_per_shift.empty:
         top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
-        top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
-        top_picker_per_shift['Total Carts Counted Per Hour'] = top_picker_per_shift['Total Carts Counted Per Hour'].apply(
+        top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Users'].astype(str)
+        top_picker_per_shift['Total Carts Counted Per Hour'] = top_picker_per_shift['Carts Counted Per Hour'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
-        # Set shift as categorical to enforce AM > PM > Night order
-        shift_order = ['AM', 'PM', 'Night']
-        top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
-        top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
     st.subheader("Top Picker Per Shift (Carts Counted Per Hour)")
-    st.dataframe(top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
-
-
-    # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags) ---
-    filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
-    exclude_types = ["Atlas Box & Bond Bags"]
-    exclude_types_lower = [t.lower() for t in exclude_types]
-    filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
-
-    # Filter out NaN station types as well as excluded ones
-    filtered_data = filtered_data[
-        filtered_data['Station Type Lower'].notna() &
-        (filtered_data['Station Type Lower'] != 'nan') &
-        (~filtered_data['Station Type Lower'].isin(exclude_types_lower))
-    ]
-
-    breakdown = (
-        filtered_data
-        .groupby(['Station Type', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
-        .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
-        .pivot(index='Station Type', columns='Shift', values='Carts Counted')
-        .reset_index()
+    st.dataframe(
+        top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']],
+        use_container_width=True,
+        hide_index=True
     )
-    breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
-    st.subheader("Carts Counted Per Hour by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
-    st.dataframe(breakdown, use_container_width=True, hide_index=True)
+
+    # --- Total Carts Picked Per Shift (per day) ---
+    carts_per_shift = (
+        filtered_data
+        .groupby(['Date', 'Shift'], as_index=False)['Drawers Counted', 'Drawer Avg'].sum(min_count=1)
+        .assign(**{
+            'AM': lambda df: np.where(df['Shift'] == "AM", np.round(df['Drawers Counted'] / df['Drawer Avg'], 2), 0),
+            'PM': lambda df: np.where(df['Shift'] == "PM", np.round(df['Drawers Counted'] / df['Drawer Avg'], 2), 0),
+            'Night': lambda df: np.where(df['Shift'] == "Night", np.round(df['Drawers Counted'] / df['Drawer Avg'], 2), 0),
+        })
+        .groupby('Date', as_index=False)[['AM', 'PM', 'Night']].sum()
+    )
+    for shift in ["AM", "PM", "Night"]:
+        if shift not in carts_per_shift.columns:
+            carts_per_shift[shift] = 0
+    carts_per_shift = carts_per_shift[["Date", "AM", "PM", "Night"]]
+    carts_per_shift['Date'] = pd.to_datetime(carts_per_shift['Date']).dt.strftime('%d-%m-%Y')
+    st.subheader("Total Carts Picked Per Shift (per day)")
+    st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
+
+    # --- Carts Counted Per Hour by Station Type & Shift (excludes "Atlas Box & Bond Bags") ---
+    filtered_station = filtered_data[
+        (filtered_data['Station Type'].notna()) & 
+        (filtered_data['Station Type'].str.strip().str.lower() != "atlas box & bond bags".lower())
+    ]
+    breakdown = (
+        filtered_station
+        .groupby(['Station Type', 'Shift'], as_index=False)
+        .agg({'Drawers Counted': 'sum', 'Drawer Avg': 'sum'})
+        .assign(Carts_Per_Hour=lambda x: np.where(
+            x['Drawer Avg'] > 0, np.round(x['Drawers Counted'] / x['Drawer Avg'], 2), 0
+        ))
+        .query("Carts_Per_Hour > 0")
+        .sort_values(['Station Type', 'Shift'])
+        .reset_index(drop=True)
+    )
+    st.subheader("Carts Counted Per Hour by Station Type & Shift")
+    st.dataframe(breakdown[['Station Type', 'Shift', 'Carts_Per_Hour']], use_container_width=True, hide_index=True)
 
