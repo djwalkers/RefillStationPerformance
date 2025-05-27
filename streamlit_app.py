@@ -103,7 +103,7 @@ def load_data():
     drop_cols = [col for col in data.columns if col.startswith("textBox") and col not in rename_map]
     data = data.drop(columns=drop_cols, errors="ignore")
     # Fix User
-    data["Users"] = data["User"].astype(str).str.split(" (").str[0].str.replace("*", "").str.strip()
+    data["Users"] = data["User"].astype(str).str.split(" (", n=1, regex=False).str[0].str.replace("*", "").str.strip()
     # Date and Time from filename
     data["Date"] = data["Source.Name"].str[:10]
     data["Time"] = data["Source.Name"].str[11:16].str.replace("-", ":")
