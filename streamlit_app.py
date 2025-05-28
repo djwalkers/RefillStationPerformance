@@ -22,9 +22,6 @@ st.markdown(
     .block-container {{
         padding-top: 1rem;
     }}
-    .css-1aumxhk, .css-1v3fvcr, .st-bd, .st-bo, .st-bn {{
-        background-color: {MAIN_COLOR} !important;
-    }}
     .stDataFrame .e1eexj620, .stDataFrame .e1eexj610 {{
         color: {MAIN_COLOR};
         font-weight: bold;
@@ -101,7 +98,7 @@ def load_data():
     # Drop unwanted columns
     drop_cols = [col for col in data.columns if col.startswith("textBox") and col not in rename_map]
     data = data.drop(columns=drop_cols, errors="ignore")
-    # Fix User (*** THIS IS THE FIXED LINE! ***)
+    # Fix User (*** FIXED regex=False ***)
     data["Users"] = data["User"].astype(str).str.split(" (", n=1, regex=False).str[0].str.replace("*", "").str.strip()
     # Date and Time from filename
     data["Date"] = data["Source.Name"].str[:10]
@@ -154,7 +151,6 @@ data = load_data()
 with st.sidebar:
     st.header("Upload New Data File")
     uploaded = st.file_uploader("Upload CSV file", type=["csv"])
-    upload_message = ""
     if uploaded is not None:
         # Filename validation: dd-mm-yyyy hh-mm.csv
         filename = uploaded.name
@@ -166,8 +162,7 @@ with st.sidebar:
         if not is_valid:
             st.error("❌ Filename must be in format: DD-MM-YYYY HH-MM.csv")
         else:
-            st.success("✅ File accepted. (Note: Actual upload requires GitHub API integration)")
-            st.info("Please manually add the file to your GitHub Data folder for now.")
+            st.success("✅ File accepted. (Manual add to GitHub required)")
     st.markdown("---")
     st.markdown(
         "<div style='color: #FFF; background: #DA362C; border-radius: 4px; padding: 8px; font-size: 15px; text-align: center;'>"
@@ -179,7 +174,6 @@ with st.sidebar:
 tabs = ["Hourly Dashboard", "Weekly Dashboard", "Monthly Dashboard", "High Performers"]
 active_tab = st.selectbox("Select Dashboard Tab", tabs, key="main_tabs")
 
-# ---- DASHBOARD FUNCTIONS ----
 def assign_shift(time_str):
     if pd.isna(time_str):
         return "Unknown"
@@ -320,8 +314,7 @@ elif active_tab == "Monthly Dashboard":
 
 elif active_tab == "High Performers":
     st.header("High Performers")
-
-    # ---- Month and Day Filters ----
+    # Month and Day Filters
     month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
     month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="summary_month")
     filtered_data = data.copy()
@@ -338,7 +331,7 @@ elif active_tab == "High Performers":
 
     trophy = "🏆 "
 
-    # --- Top Picker Per Day (Carts Counted Per Hour) with Station Type & DRILLDOWN ---
+    # --- Top Picker Per Day (Carts Counted Per Hour) with Station Type ---
     daily_totals = (
         filtered_data.groupby(['Date', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
     )
@@ -360,7 +353,6 @@ elif active_tab == "High Performers":
         how='left'
     ).drop(columns=['Users'])
 
-
     if not top_picker_per_day.empty:
         top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
         top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
@@ -371,16 +363,14 @@ elif active_tab == "High Performers":
     st.markdown(
         "*Note: This table sums all picks by each user within the full calendar day, regardless of shift boundaries. "
         "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift times.*",
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
-    # ---- Drilldown Implementation ----
     top_picker_per_day_display = top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']].reset_index(drop=True)
     st.dataframe(
         top_picker_per_day_display,
         use_container_width=True,
         hide_index=True
     )
-    # No true "row selection" in st.dataframe for Streamlit Cloud yet; so we skip drilldown unless you switch to AgGrid or st.data_editor
 
     # --- Top Picker Per Shift (Carts Counted Per Hour) ---
     shift_totals = (
