@@ -10,10 +10,6 @@ st.set_page_config(page_title="Refill Station Performance Report", layout="wide"
 st.markdown("""
     <style>
     .stApp { background-color: #DA362C !important; }
-    .st-emotion-cache-10trblm, .st-emotion-cache-1v0mbdj, .st-emotion-cache-16txtl3,
-    .st-emotion-cache-1d391kg, .css-1q8dd3e, .st-cg, .st-emotion-cache-bm2z3a, .st-emotion-cache-zt5igj, .st-emotion-cache-1n76uvr, .st-emotion-cache-1avcm0n {
-        color: #fff !important;
-    }
     .stTabs [data-baseweb="tab"] {
         background-color: #DA362C !important;
         color: white !important;
@@ -31,14 +27,14 @@ st.markdown("""
 MAIN_COLOR = "#DA362C"
 WHITE = "#FFFFFF"
 
-# --- LOGO & UPLOAD (top row) ---
+# --- LOGO & TITLE ---
 row_logo, row_title = st.columns([1,5])
 with row_logo:
     st.image("The Roc.png", use_column_width=True)
 with row_title:
     st.title("Refill Station Performance Report")
-    uploaded_file = st.file_uploader("Upload new data file (CSV)", type="csv", label_visibility="visible")
 
+# --- LOAD DATA FROM GITHUB ---
 @st.cache_data(show_spinner=True)
 def load_data():
     github_repo = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/"
@@ -127,14 +123,7 @@ def load_data():
     data["Date"] = data["Date"].dt.strftime("%d-%m-%Y")
     return data
 
-# -- Use uploaded file or GitHub data --
-if uploaded_file:
-    data = pd.read_csv(uploaded_file)
-    # You might need to clean/merge as above if using uploads
-    if "Carts Counted Per Hour" not in data.columns:
-        data["Carts Counted Per Hour"] = data["Drawers Counted"] / data["Drawer Avg"]
-else:
-    data = load_data()
+data = load_data()
 
 # -- SEARCH + LIMIT CHART HELPER --
 def horizontal_bar_chart(df, category_col, value_col, chart_title, color=MAIN_COLOR):
@@ -212,7 +201,6 @@ with tabs[0]:
 # ---- WEEKLY DASHBOARD ----
 with tabs[1]:
     st.markdown("## Weekly Dashboard")
-    # You'll need to implement a 'Week' field from Date if required
     station_type_filter = st.selectbox("Station Type", options=["All"] + sorted(data["Station Type"].astype(str).unique().tolist()))
     filtered = data.copy()
     if station_type_filter != "All":
@@ -249,10 +237,33 @@ with tabs[2]:
 with tabs[3]:
     st.markdown("## High Performers")
     df = data.copy()
+    # Top picker per day (sum of all picks in calendar day)
     top_picker_per_day = (
-        df.groupby(["Date", "Users"], as_index=False)["Carts Counted Per Hour"].sum()
+        df.groupby(["Date", "Users", "Station Type"], as_index=False)["Carts Counted Per Hour"].sum()
         .sort_values(["Date", "Carts Counted Per Hour"], ascending=[True, False])
         .groupby("Date").head(1)
     )
     st.markdown("### Top Picker Per Day (Carts Counted Per Hour)")
-    st.dataframe(top_picker_per_day, use_container_width=True, hide_index=True)
+    st.dataframe(top_picker_per_day[["Date", "Users", "Station Type", "Carts Counted Per Hour"]], use_container_width=True, hide_index=True)
+
+    # Top picker per shift (AM, PM, Night)
+    def shift_label(time_str):
+        try:
+            h, m = map(int, str(time_str).split(":"))
+            mins = h*60 + m
+            if 6*60 <= mins <= 14*60: return "AM"
+            elif 14*60+1 <= mins <= 22*60: return "PM"
+            else: return "Night"
+        except:
+            return "Unknown"
+    df["Shift"] = df["Time"].apply(shift_label)
+    shift_order = ["AM", "PM", "Night"]
+    top_picker_per_shift = (
+        df.groupby(["Date", "Shift", "Users", "Station Type"], as_index=False)["Carts Counted Per Hour"].sum()
+        .sort_values(["Date", "Shift", "Carts Counted Per Hour"], ascending=[True, True, False])
+        .groupby(["Date", "Shift"]).head(1)
+    )
+    st.markdown("### Top Picker Per Shift (Carts Counted Per Hour)")
+    st.dataframe(top_picker_per_shift[["Date", "Shift", "Users", "Station Type", "Carts Counted Per Hour"]]
+        .sort_values(["Date", "Shift"], key=lambda x: x.map({k:i for i,k in enumerate(shift_order)} if x.name=="Shift" else None))
+        , use_container_width=True, hide_index=True)
