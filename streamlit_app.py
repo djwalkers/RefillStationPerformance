@@ -491,7 +491,7 @@ elif active_tab == "High Performers":
         shift_order = ['AM', 'PM', 'Night']
         top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
         top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
-    st.subheader("Top Picker Per Shift (Carts Counted Per Hour)")
+    st.subheader("Top Picker Per Shift (All Carts Counted)")
     st.dataframe(top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
 
 
