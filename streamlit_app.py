@@ -84,6 +84,9 @@ def load_data():
         st.error("No data files found in GitHub repo.")
         return pd.DataFrame()
     data = pd.concat(dfs, ignore_index=True)
+    # --- FIX: Handle "Source.Name" or "Name" ---
+    if "Source.Name" not in data.columns and "Name" in data.columns:
+        data = data.rename(columns={"Name": "Source.Name"})
     # Rename columns to match Power Query logic
     column_map = {
         "textBox9": "Station Id",
@@ -117,7 +120,6 @@ def load_data():
     data["Drawers Counted"] = pd.to_numeric(data["Drawers Counted"], errors="coerce").fillna(0)
     data["Drawer Avg"] = pd.to_numeric(data["Drawer Avg"], errors="coerce").fillna(1)
     data["Carts Counted Per Hour"] = (data["Drawers Counted"] / data["Drawer Avg"]).fillna(0)
-    # Remove ATLAS BOX & BOND BAGS from station type in breakdowns
     return data
 
 data = load_data()
