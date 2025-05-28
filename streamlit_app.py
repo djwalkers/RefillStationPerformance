@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import requests
+
+st.set_page_config(page_title="Refill Station Performance Report", layout="wide")
 
 # -- THEME --
-st.set_page_config(page_title="Refill Station Performance Report", layout="wide")
 st.markdown("""
     <style>
     .stApp { background-color: #DA362C !important; }
@@ -37,27 +39,100 @@ with row_title:
     st.title("Refill Station Performance Report")
     uploaded_file = st.file_uploader("Upload new data file (CSV)", type="csv", label_visibility="visible")
 
-# ---- DATA LOAD ----
-@st.cache_data
+@st.cache_data(show_spinner=True)
 def load_data():
-    # DUMMY data for template -- REPLACE this block with your actual GitHub data load/clean!
-    data = pd.DataFrame({
-        "Date": pd.date_range("2025-05-01", periods=60, freq='D').repeat(8),
-        "Users": np.tile(["USER"+str(i) for i in range(1,9)], 60),
-        "Drawers Counted": np.random.randint(10, 100, 480),
-        "Drawer Avg": np.random.randint(1, 10, 480),
-        "Rogues Processed": np.random.randint(0, 10, 480),
-        "Damaged Drawers Processed": np.random.randint(0, 10, 480),
-        "Damaged Products Processed": np.random.randint(0, 10, 480),
-        "Station Type": np.tile(["TypeA", "TypeB", "Atlas Box & Bond Bags", "TypeC"], 120),
-        "Time": np.random.choice([f"{h:02d}:00" for h in range(6,23)], 480),
-    })
-    data["Carts Counted Per Hour"] = data["Drawers Counted"] / data["Drawer Avg"]
+    github_repo = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance/main/"
+    api_url = "https://api.github.com/repos/djwalkers/RefillStationPerformance/contents/Data"
+    file_list = requests.get(api_url).json()
+    csv_files = [f["download_url"] for f in file_list if f["name"].endswith(".csv")]
+    dfs = []
+    for url in csv_files:
+        df = pd.read_csv(url)
+        dfs.append(df)
+    if not dfs:
+        st.error("No data files found in GitHub repo.")
+        return pd.DataFrame()
+    data = pd.concat(dfs, ignore_index=True)
+
+    # Date Dimension Table
+    date_dim_url = github_repo + "Files/Date%20Dimension%20Table.xlsx"
+    date_dim = pd.read_excel(date_dim_url, sheet_name="Sheet1")
+    # Station Table
+    station_url = github_repo + "Files/Station%20Standard.xlsx"
+    station = pd.read_excel(station_url, sheet_name="Station")
+
+    # --- Power Query Style Cleanup ---
+    data.rename(columns={
+        "textBox9": "Station Id",
+        "textBox10": "User",
+        "textBox13": "Drawers Counted",
+        "textBox17": "Damaged Drawers Processed",
+        "textBox19": "Damaged Products Processed",
+        "textBox21": "Rogues Processed",
+    }, inplace=True)
+
+    # Drop extra columns
+    keep_cols = [
+        "Source.Name", "Station Id", "User", "Drawers Counted",
+        "Damaged Drawers Processed", "Damaged Products Processed", "Rogues Processed"
+    ]
+    for col in data.columns:
+        if col not in keep_cols:
+            data = data.drop(columns=[col], errors="ignore")
+
+    # Extract Date and Time from Source.Name
+    data["Date"] = pd.to_datetime(data["Source.Name"].str[:10], format="%d-%m-%Y", errors='coerce')
+    data["Time"] = data["Source.Name"].str[11:16].str.replace("-", ":")
+    data["Users"] = data["User"].astype(str).str.split(" (").str[0].str.replace("*", "", regex=False).str.strip()
+
+    # Remove staff/test accounts
+    excluded_users = [
+        "AARON DAVIES", "ADAM DAVENHILL", "ANDY WALKER", "ANNA DZIEDZIC-WIDZICKA",
+        "BEN NORBURY", "CHARLOTTE BIBBY", "DANIEL ROGERSON", "DOMINIC PASKIN",
+        "GEORGE SMITH", "JEFFERY FLETCHER", "MARCIN SZABLINSKI", "MARCOS CHAINIUK",
+        "MARK BANHAM", "MAUREEN OUGHTON", "MAX CHAPPEL", "MICHAEL RUSHTON",
+        "MICHAL ROWDO", "PIETER DAVIDS", "ROGER COULSON", "ROXANNE HAYNES",
+        "SAM BENNETT", "STUART FOWLES", "TAMMY HITCHMOUGH", "TAYLOR MADDOCK",
+        "TAYLOR MADDOX", "VASELA VELKOVA"
+    ]
+    data = data[~data["Users"].isin(excluded_users)]
+
+    # Merge with dimension tables
+    data = pd.merge(data, date_dim, on="Date", how="left")
+    data = pd.merge(data, station, left_on="Station Id", right_on="Station", how="left")
+
+    # Compute Carts Counted Per Hour
+    data["Drawer Avg"] = pd.to_numeric(data["Drawer Avg"], errors="coerce").fillna(1)
+    data["Drawers Counted"] = pd.to_numeric(data["Drawers Counted"], errors="coerce").fillna(0)
+    data["Carts Counted Per Hour"] = (data["Drawers Counted"] / data["Drawer Avg"]).replace([np.inf, -np.inf], 0).round(2)
+
+    # Remove "Atlas Box & Bond Bags" and NaN station types
+    data = data[~(data["Station Type"].str.upper() == "ATLAS BOX & BOND BAGS")]
+    data = data[~data["Station Type"].isna()]
+
+    # Drop NaNs in main columns
+    data = data.dropna(subset=["Users", "Station Id", "Date"])
+
+    # Ensure columns present for plotting
+    needed = [
+        "Date", "Users", "Drawers Counted", "Drawer Avg",
+        "Damaged Drawers Processed", "Damaged Products Processed", "Rogues Processed",
+        "Station Type", "Carts Counted Per Hour", "Time"
+    ]
+    for col in needed:
+        if col not in data.columns:
+            data[col] = 0
+
+    # Format dates
+    data["Date"] = data["Date"].dt.strftime("%d-%m-%Y")
     return data
 
+# -- Use uploaded file or GitHub data --
 if uploaded_file:
     data = pd.read_csv(uploaded_file)
-    data["Carts Counted Per Hour"] = data["Drawers Counted"] / data["Drawer Avg"]
+    # You might need to clean/merge as above if using uploads
+    if "Carts Counted Per Hour" not in data.columns:
+        data["Carts Counted Per Hour"] = data["Drawers Counted"] / data["Drawer Avg"]
 else:
     data = load_data()
 
@@ -112,7 +187,72 @@ tabs = st.tabs([
 with tabs[0]:
     st.markdown("## Hourly Dashboard")
     col1, col2, col3, col4 = st.columns(4)
-    month_filter = col1.selectbox("Month", options=["All"] + sorted(data["Date"].astype(str).str[:7].unique().tolist()))
-    date_filter = col2.selectbox("Date", options=["All"] + sorted(data["Date"].astype(str).unique().tolist()))
+    month_filter = col1.selectbox("Month", options=["All"] + sorted(data["Date"].str[3:10].unique().tolist()))
+    date_filter = col2.selectbox("Date", options=["All"] + sorted(data["Date"].unique().tolist()))
     time_filter = col3.selectbox("Time", options=["All"] + sorted(data["Time"].astype(str).unique().tolist()))
-    station_type_filter = col4.selectbox
+    station_type_filter = col4.selectbox("Station Type", options=["All"] + sorted(data["Station Type"].astype(str).unique().tolist()))
+    filtered = data.copy()
+    if month_filter != "All":
+        filtered = filtered[filtered["Date"].str[3:10] == month_filter]
+    if date_filter != "All":
+        filtered = filtered[filtered["Date"] == date_filter]
+    if time_filter != "All":
+        filtered = filtered[filtered["Time"].astype(str) == time_filter]
+    if station_type_filter != "All":
+        filtered = filtered[filtered["Station Type"].astype(str) == station_type_filter]
+    horizontal_bar_chart(filtered, "Users", "Carts Counted Per Hour", "Carts Counted Per Hour")
+    colA, colB, colC = st.columns(3)
+    with colA:
+        horizontal_bar_chart(filtered, "Users", "Rogues Processed", "Rogues Processed")
+    with colB:
+        horizontal_bar_chart(filtered, "Users", "Damaged Drawers Processed", "Damaged Drawers Processed")
+    with colC:
+        horizontal_bar_chart(filtered, "Users", "Damaged Products Processed", "Damaged Products Processed")
+
+# ---- WEEKLY DASHBOARD ----
+with tabs[1]:
+    st.markdown("## Weekly Dashboard")
+    # You'll need to implement a 'Week' field from Date if required
+    station_type_filter = st.selectbox("Station Type", options=["All"] + sorted(data["Station Type"].astype(str).unique().tolist()))
+    filtered = data.copy()
+    if station_type_filter != "All":
+        filtered = filtered[filtered["Station Type"].astype(str) == station_type_filter]
+    horizontal_bar_chart(filtered, "Users", "Carts Counted Per Hour", "Carts Counted Per Week")
+    colA, colB, colC = st.columns(3)
+    with colA:
+        horizontal_bar_chart(filtered, "Users", "Rogues Processed", "Rogues Processed")
+    with colB:
+        horizontal_bar_chart(filtered, "Users", "Damaged Drawers Processed", "Damaged Drawers Processed")
+    with colC:
+        horizontal_bar_chart(filtered, "Users", "Damaged Products Processed", "Damaged Products Processed")
+
+# ---- MONTHLY DASHBOARD ----
+with tabs[2]:
+    st.markdown("## Monthly Dashboard")
+    month_filter = st.selectbox("Month", options=["All"] + sorted(data["Date"].str[3:10].unique().tolist()))
+    station_type_filter = st.selectbox("Station Type", options=["All"] + sorted(data["Station Type"].astype(str).unique().tolist()))
+    filtered = data.copy()
+    if month_filter != "All":
+        filtered = filtered[filtered["Date"].str[3:10] == month_filter]
+    if station_type_filter != "All":
+        filtered = filtered[filtered["Station Type"].astype(str) == station_type_filter]
+    horizontal_bar_chart(filtered, "Users", "Carts Counted Per Hour", "Carts Counted Per Month")
+    colA, colB, colC = st.columns(3)
+    with colA:
+        horizontal_bar_chart(filtered, "Users", "Rogues Processed", "Rogues Processed")
+    with colB:
+        horizontal_bar_chart(filtered, "Users", "Damaged Drawers Processed", "Damaged Drawers Processed")
+    with colC:
+        horizontal_bar_chart(filtered, "Users", "Damaged Products Processed", "Damaged Products Processed")
+
+# ---- HIGH PERFORMERS ----
+with tabs[3]:
+    st.markdown("## High Performers")
+    df = data.copy()
+    top_picker_per_day = (
+        df.groupby(["Date", "Users"], as_index=False)["Carts Counted Per Hour"].sum()
+        .sort_values(["Date", "Carts Counted Per Hour"], ascending=[True, False])
+        .groupby("Date").head(1)
+    )
+    st.markdown("### Top Picker Per Day (Carts Counted Per Hour)")
+    st.dataframe(top_picker_per_day, use_container_width=True, hide_index=True)
