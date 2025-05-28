@@ -481,8 +481,19 @@ elif active_tab == "High Performers":
         top_picker_per_shift['Total Carts Counted Per Hour'] = top_picker_per_shift['Total Carts Counted Per Hour'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
-    st.subheader("Top Picker Per Shift (Carts Counted Per Hour)")
+        # Set shift as categorical to enforce AM > PM > Night order
+        shift_order = ['AM', 'PM', 'Night']
+        top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
+        top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
+    st.subheader("Top Picker Per Day (All Hours)")
+    st.markdown(
+        "*Note: This table sums all picks by each user within the full day, regardless of shift. "
+        "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift.*",
+        unsafe_allow_html=True
+    )  # <- Only one closing parenthesis here!
+
     st.dataframe(top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
+
 
     # --- Total Carts Counted Per Hour Per Shift (per day) ---
     carts_per_shift = (
