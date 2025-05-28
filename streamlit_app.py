@@ -500,7 +500,7 @@ elif active_tab == "High Performers":
     # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags) ---
     # Normalize Station Type for robust filtering
     filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
-    exclude_types = ["Atlas Box", "Bond Bags"]
+    exclude_types = ["Atlas Box & Bond Bags"]
     exclude_types_lower = [t.lower() for t in exclude_types]
     filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
 
