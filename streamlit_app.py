@@ -349,16 +349,17 @@ elif active_tab == "High Performers":
     )
     # Get main station type for the day
     main_station = (
-        filtered_data.groupby(['Date', 'Top Picker', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+        filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    main_station_idx = main_station.groupby(['Date', 'Top Picker'])['Carts Counted Per Hour'].idxmax()
-    main_station = main_station.loc[main_station_idx][['Date', 'Top Picker', 'Station Type']]
+    main_station_idx = main_station.groupby(['Date', 'Users'])['Carts Counted Per Hour'].idxmax()
+    main_station = main_station.loc[main_station_idx][['Date', 'Users', 'Station Type']]
     top_picker_per_day = top_picker_per_day.merge(
         main_station,
         left_on=['Date', 'Top Picker'],
-        right_on=['Date', 'Top Picker'],
+        right_on=['Date', 'Users'],
         how='left'
-    )
+    ).drop(columns=['Users'])
+
 
     if not top_picker_per_day.empty:
         top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
