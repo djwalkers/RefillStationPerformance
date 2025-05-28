@@ -396,3 +396,4 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
 if active_tab == "Hourly Dashboard":
     st.header("Hourly Dashboard")
     dashboard_tab(data.copy(), "hourly", time_filters=True, week_filter
+)
