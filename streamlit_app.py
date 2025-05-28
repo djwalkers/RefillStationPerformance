@@ -505,7 +505,7 @@ elif active_tab == "High Performers":
     carts_per_shift = ensure_shift_columns(carts_per_shift, index_col="Date")
     if not carts_per_shift.empty:
         carts_per_shift['Date'] = pd.to_datetime(carts_per_shift['Date']).dt.strftime('%d-%m-%Y')
-    st.subheader("Total Carts Counted Per Hour Per Shift (per day)")
+    st.subheader("Total Carts Counted Per Shift (per day)")
     st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
 
     # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags) ---
@@ -529,6 +529,6 @@ elif active_tab == "High Performers":
         .reset_index()
     )
     breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
-    st.subheader("Carts Counted Per Hour by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
+    st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
     st.dataframe(breakdown, use_container_width=True, hide_index=True)
 
