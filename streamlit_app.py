@@ -481,7 +481,7 @@ st.dataframe(
 )
 
 # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
-    top_carts_shift = (
+top_carts_shift = (
         filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
     idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
