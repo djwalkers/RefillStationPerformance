@@ -453,34 +453,34 @@ elif active_tab == "High Performers":
     trophy = "🏆 "
 
     # --- Top Picker Per Day (Total Carts Counted) with Station Type ---
-    top_carts_day = (
-        filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+top_carts_day = (
+    filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+)
+idx = top_carts_day.groupby('Date')['Carts Counted Per Hour'].idxmax()
+top_picker_per_day = top_carts_day.loc[idx].reset_index(drop=True)
+top_picker_per_day = top_picker_per_day.rename(columns={
+    'Users': 'Top Picker',
+    'Carts Counted Per Hour': 'Total Carts Counted'
+})
+if not top_picker_per_day.empty:
+    top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
+    top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
+    top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
+        lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
     )
-    idx = top_carts_day.groupby('Date')['Carts Counted Per Hour'].idxmax()
-    top_picker_per_day = top_carts_day.loc[idx].reset_index(drop=True)
-    top_picker_per_day = top_picker_per_day.rename(columns={
-        'Users': 'Top Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
-    if not top_picker_per_day.empty:
-        top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
-        top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
-        top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
-    st.subheader("Top Picker Per Day (All Hours)")
-    st.markdown(
-        "*Note: This table sums all picks by each user within the full day, regardless of shift. "
-        "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift.*",
-        unsafe_allow_html=True
-    )
-    st.dataframe(
-        top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted']],
-        use_container_width=True,
-        hide_index=True
-    )
+st.subheader("Top Picker Per Day (All Hours)")
+st.markdown(
+    "*Note: This table sums all picks by each user within the full day, regardless of shift. "
+    "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift.*",
+    unsafe_allow_html=True
+)
+st.dataframe(
+    top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+    use_container_width=True,
+    hide_index=True
+)
 
-    # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
+# --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
     top_carts_shift = (
         filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
@@ -496,7 +496,7 @@ elif active_tab == "High Performers":
         top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
-    # Set shift as categorical to enforce AM > PM > Night order
+        # Set shift as categorical to enforce AM > PM > Night order
         shift_order = ['AM', 'PM', 'Night']
         top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
         top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
@@ -506,4 +506,41 @@ elif active_tab == "High Performers":
         use_container_width=True,
         hide_index=True
     )
+
+    # --- Total Carts Counted Per Shift (per day) ---
+    carts_per_shift = (
+        filtered_data.groupby(['Date', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
+        .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
+        .pivot(index='Date', columns='Shift', values='Carts Counted')
+        .reset_index()
+    )
+    carts_per_shift = ensure_shift_columns(carts_per_shift, index_col="Date")
+    if not carts_per_shift.empty:
+        carts_per_shift['Date'] = pd.to_datetime(carts_per_shift['Date']).dt.strftime('%d-%m-%Y')
+    st.subheader("Total Carts Counted Per Shift (per day)")
+    st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
+
+# --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags) ---
+    filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
+    exclude_types = ["Atlas Box & Bond Bags"]
+    exclude_types_lower = [t.lower() for t in exclude_types]
+    filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
+
+# Filter out NaN station types as well as excluded ones
+    filtered_data = filtered_data[
+        filtered_data['Station Type Lower'].notna() &
+        (filtered_data['Station Type Lower'] != 'nan') &
+        (~filtered_data['Station Type Lower'].isin(exclude_types_lower))
+    ]
+
+    breakdown = (
+        filtered_data
+        .groupby(['Station Type', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
+        .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
+        .pivot(index='Station Type', columns='Shift', values='Carts Counted')
+        .reset_index()
+    )
+    breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
+    st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
+    st.dataframe(breakdown, use_container_width=True, hide_index=True)
 
