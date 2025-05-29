@@ -484,7 +484,7 @@ st.dataframe(
 top_carts_shift = (
         filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
+idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
     top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
     top_picker_per_shift = top_picker_per_shift.rename(columns={
         'Users': 'Top Picker',
