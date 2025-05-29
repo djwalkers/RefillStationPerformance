@@ -472,7 +472,7 @@ elif active_tab == "High Performers":
         unsafe_allow_html=True
     )  # <- Only one closing parenthesis here!
 
-    st.dataframe(top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
+    st.dataframe(top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted']], use_container_width=True, hide_index=True)
 
     # --- Top Picker Per Shift (Carts Counted Per Hour) with Station Type ---
     top_carts_shift = (
