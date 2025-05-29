@@ -458,11 +458,14 @@ elif active_tab == "High Performers":
     )
     idx = top_carts_day.groupby('Date')['Carts Counted Per Hour'].idxmax()
     top_picker_per_day = top_carts_day.loc[idx].reset_index(drop=True)
-    top_picker_per_day = top_picker_per_day.rename(columns={'Users': 'Top Picker', 'Carts Counted Per Hour': 'Total Carts Counted Per Hour'})
+    top_picker_per_day = top_picker_per_day.rename(columns={
+        'Users': 'Top Picker',
+        'Carts Counted Per Hour': 'Total Carts Counted'
+    })
     if not top_picker_per_day.empty:
         top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
         top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
-        top_picker_per_day['Total Carts Counted Per Hour'] = top_picker_per_day['Total Carts Counted Per Hour'].apply(
+        top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
     st.subheader("Top Picker Per Day (All Hours)")
@@ -470,7 +473,14 @@ elif active_tab == "High Performers":
         "*Note: This table sums all picks by each user within the full day, regardless of shift. "
         "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift.*",
         unsafe_allow_html=True
-    )  # <- Only one closing parenthesis here!
+    )
+
+    st.dataframe(
+        top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+        use_container_width=True,
+        hide_index=True
+    )
+
 
     st.dataframe(top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted Per Hour']], use_container_width=True, hide_index=True)
 
