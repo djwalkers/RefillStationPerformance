@@ -485,24 +485,24 @@ top_carts_shift = (
         filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
 idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
-    top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
-    top_picker_per_shift = top_picker_per_shift.rename(columns={
+top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
+top_picker_per_shift = top_picker_per_shift.rename(columns={
         'Users': 'Top Picker',
         'Carts Counted Per Hour': 'Total Carts Counted'
     })
     if not top_picker_per_shift.empty:
-        top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
-        top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
-        top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
+    top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
+    top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
+    top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
             lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
         )
         # Set shift as categorical to enforce AM > PM > Night order
         shift_order = ['AM', 'PM', 'Night']
-        top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
-        top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
+    top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
+    top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
     st.subheader("Top Picker Per Day (Shift Based)")
     st.dataframe(
-        top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+    top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
         use_container_width=True,
         hide_index=True
     )
