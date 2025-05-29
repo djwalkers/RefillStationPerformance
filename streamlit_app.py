@@ -452,7 +452,7 @@ elif active_tab == "High Performers":
 
     trophy = "🏆 "
 
-    # --- Top Picker Per Day (Total Carts Counted) with Station Type ---
+# --- Top Picker Per Day (Total Carts Counted) with All Station Types per User ---
 top_carts_day = (
     filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
 )
@@ -462,23 +462,41 @@ top_picker_per_day = top_picker_per_day.rename(columns={
     'Users': 'Top Picker',
     'Carts Counted Per Hour': 'Total Carts Counted'
 })
+
 if not top_picker_per_day.empty:
+    # For each row, collect ALL unique Station Types for that user on that date
+    station_types_per_user = (
+        filtered_data.groupby(['Date', 'Users'])['Station Type']
+        .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
+        .reset_index()
+        .rename(columns={'Users': 'Top Picker', 'Station Type': 'All Station Types'})
+    )
+    # Merge all station types back into top_picker_per_day
+    top_picker_per_day = top_picker_per_day.merge(
+        station_types_per_user,
+        left_on=['Date', 'Top Picker'],
+        right_on=['Date', 'Top Picker'],
+        how='left'
+    )
+
     top_picker_per_day['Date'] = pd.to_datetime(top_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
     top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
     top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
         lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
     )
+
 st.subheader("Top Picker Per Day (All Hours)")
 st.markdown(
     "*Note: This table sums all picks by each user within the full day, regardless of shift. "
-    "A user’s total may differ from the sum of their per-shift totals if their activity crosses shift.*",
+    "If a top picker used multiple station types in a day, all will be displayed below.*",
     unsafe_allow_html=True
 )
 st.dataframe(
-    top_picker_per_day[['Date', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+    top_picker_per_day[['Date', 'Top Picker', 'All Station Types', 'Total Carts Counted']],
     use_container_width=True,
     hide_index=True
 )
+
 
 # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
 top_carts_shift = (
