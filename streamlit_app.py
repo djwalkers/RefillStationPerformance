@@ -510,10 +510,11 @@ elif active_tab == "High Performers":
     )
 
     # Drilldown by clicking row
-    if aggrid_response.selected_rows is not None and len(aggrid_response.selected_rows) > 0:
-        selected = aggrid_response.selected_rows[0]
-        selected_date = selected["Date"]
-        selected_picker = selected["Top Picker"].replace("🏆 ", "")
+    sel = aggrid_response.selected_rows
+if sel and isinstance(sel, list) and isinstance(sel[0], dict):
+    selected = sel[0]
+    selected_date = selected["Date"]
+    selected_picker = selected["Top Picker"].replace("🏆 ", "")
         st.markdown(f"### Details for {selected_picker} on {selected_date}")
         drilldown_rows = data[
             (data['Date'].dt.strftime('%d-%m-%Y') == selected_date) &
