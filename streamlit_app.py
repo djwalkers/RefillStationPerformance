@@ -511,7 +511,7 @@ elif active_tab == "High Performers":
 
     # Drilldown by clicking row
     sel = aggrid_response.selected_rows
-if sel and isinstance(sel, list) and isinstance(sel[0], dict):
+    if sel and isinstance(sel, list) and isinstance(sel[0], dict):
     selected = sel[0]
     selected_date = selected["Date"]
     selected_picker = selected["Top Picker"].replace("🏆 ", "")
