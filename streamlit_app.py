@@ -516,7 +516,7 @@ elif active_tab == "High Performers":
 
     if sel is not None and len(sel) > 0:
     # Case 1: selected_rows is a list of dicts
-    if isinstance(sel, list) and isinstance(sel[0], dict):
+        if isinstance(sel, list) and isinstance(sel[0], dict):
         selected_row = sel[0]
         selected_date = selected_row.get('Date')
         selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
