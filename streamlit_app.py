@@ -517,15 +517,15 @@ elif active_tab == "High Performers":
     if sel is not None and len(sel) > 0:
     # Case 1: selected_rows is a list of dicts
         if isinstance(sel, list) and isinstance(sel[0], dict):
-        selected_row = sel[0]
-        selected_date = selected_row.get('Date')
-        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
+            selected_row = sel[0]
+            selected_date = selected_row.get('Date')
+            selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
     # Case 2: selected_rows is a DataFrame
     elif hasattr(sel, 'iloc') and len(sel) > 0:
         # Use iloc[0] to get the first row
-        selected_row = sel.iloc[0]
-        selected_date = selected_row.get('Date')
-        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
+            selected_row = sel.iloc[0]
+            selected_date = selected_row.get('Date')
+            selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
 
 
     if selected_date and selected_picker:
