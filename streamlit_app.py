@@ -490,7 +490,7 @@ top_picker_per_shift = top_picker_per_shift.rename(columns={
         'Users': 'Top Picker',
         'Carts Counted Per Hour': 'Total Carts Counted'
     })
-    if not top_picker_per_shift.empty:
+if not top_picker_per_shift.empty:
     top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
     top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
     top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
