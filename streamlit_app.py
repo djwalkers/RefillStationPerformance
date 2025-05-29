@@ -407,20 +407,50 @@ elif active_tab == "Monthly Dashboard":
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
-with st.container():
+elif active_tab == "High Performers":
     st.header("High Performers")
 
-    # --- Filters ---
-    month_options = sorted(data['Month'].dropna().unique(), key=lambda x: str(x))
-    day_options = sorted(data['Date'].dt.strftime('%d-%m-%Y').unique())
-    selected_month = st.selectbox("Month", options=["All"] + month_options, index=0)
-    selected_day = st.selectbox("Day", options=["All"] + day_options, index=0)
-
+    # ---- Month and Day Filters ----
+    month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
+    month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="summary_month")
     filtered_data = data.copy()
-    if selected_month != "All":
-        filtered_data = filtered_data[filtered_data['Month'] == selected_month]
-    if selected_day != "All":
-        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%d-%m-%Y') == selected_day]
+    if month_sel != "All":
+        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%B') == month_sel]
+
+    day_options = sorted(filtered_data['Date'].dt.strftime('%d-%m-%Y').dropna().unique())
+    day_sel = st.selectbox("Filter by Day:", ["All"] + day_options, key="summary_day")
+    if day_sel != "All":
+        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%d-%m-%Y') == day_sel]
+
+    # Assign shift based on time
+    def assign_shift(time_str):
+        if pd.isna(time_str):
+            return "Unknown"
+        try:
+            hour, minute = map(int, str(time_str).split(":"))
+        except:
+            return "Unknown"
+        total_minutes = hour * 60 + minute
+        if 6*60 <= total_minutes <= 14*60:
+            return "AM"
+        elif 14*60 < total_minutes <= 22*60:
+            return "PM"
+        else:
+            return "Night"
+    filtered_data['Shift'] = filtered_data['Time'].apply(assign_shift)
+
+    def ensure_shift_columns(df, index_col="Date"):
+        for shift in ["AM", "PM", "Night"]:
+            if shift not in df.columns:
+                df[shift] = 0
+        cols = [index_col, "AM", "PM", "Night"]
+        df = df[[c for c in cols if c in df.columns]]
+        for shift in ["AM", "PM", "Night"]:
+            if shift in df.columns:
+                df[shift] = df[shift].fillna(0)
+        return df
+
+    trophy = "🏆 "
 
     # --- Top Picker Per Day (Total Carts Counted) with All Station Types per User ---
     top_carts_day = (
@@ -432,6 +462,7 @@ with st.container():
         'Users': 'Top Picker',
         'Carts Counted Per Hour': 'Total Carts Counted'
     })
+
     if not top_picker_per_day.empty:
         # For each row, collect ALL unique Station Types for that user on that date
         station_types_per_user = (
@@ -466,7 +497,7 @@ with st.container():
         hide_index=True
     )
 
-    # --- Top Picker Per Shift (Carts Counted Per Hour) with Station Type ---
+    # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
     top_carts_shift = (
         filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
     )
@@ -513,14 +544,14 @@ with st.container():
     filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
 
     # Filter out NaN station types as well as excluded ones
-    filtered_data_for_breakdown = filtered_data[
+    filtered_data = filtered_data[
         filtered_data['Station Type Lower'].notna() &
         (filtered_data['Station Type Lower'] != 'nan') &
         (~filtered_data['Station Type Lower'].isin(exclude_types_lower))
     ]
 
     breakdown = (
-        filtered_data_for_breakdown
+        filtered_data
         .groupby(['Station Type', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
         .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
         .pivot(index='Station Type', columns='Shift', values='Carts Counted')
@@ -529,4 +560,3 @@ with st.container():
     breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
     st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
     st.dataframe(breakdown, use_container_width=True, hide_index=True)
-
