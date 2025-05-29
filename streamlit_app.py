@@ -513,15 +513,20 @@ elif active_tab == "High Performers":
 
     sel = aggrid_response.get('selected_rows')
     selected_date, selected_picker = None, None
+
     if sel is not None and len(sel) > 0:
-        # Handle both DataFrame and list/dict
+    # Case 1: selected_rows is a list of dicts
+    if isinstance(sel, list) and isinstance(sel[0], dict):
         selected_row = sel[0]
-        if isinstance(selected_row, dict):
-            selected_date = selected_row.get('Date')
-            selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
-        elif isinstance(selected_row, pd.Series):
-            selected_date = selected_row.get('Date')
-            selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
+        selected_date = selected_row.get('Date')
+        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
+    # Case 2: selected_rows is a DataFrame
+    elif hasattr(sel, 'iloc') and len(sel) > 0:
+        # Use iloc[0] to get the first row
+        selected_row = sel.iloc[0]
+        selected_date = selected_row.get('Date')
+        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
+
 
     if selected_date and selected_picker:
         st.markdown(f"### Details for {selected_picker} on {selected_date}")
