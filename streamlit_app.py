@@ -510,7 +510,7 @@ elif active_tab == "High Performers":
     )
 
     # Drilldown by clicking row
-    if aggrid_response.selected_rows:
+    if aggrid_response.selected_rows is not None and len(aggrid_response.selected_rows) > 0:
         selected = aggrid_response.selected_rows[0]
         selected_date = selected["Date"]
         selected_picker = selected["Top Picker"].replace("🏆 ", "")
