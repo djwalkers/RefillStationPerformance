@@ -410,7 +410,7 @@ elif active_tab == "Monthly Dashboard":
 
 elif active_tab == "High Performers":
     st.header("High Performers")
-
+    trophy = "🏆 "
     # ---- Month and Day Filters ----
     month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
     month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="summary_month")
