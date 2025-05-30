@@ -410,7 +410,7 @@ elif active_tab == "Monthly Dashboard":
 
 elif active_tab == "High Performers":
     st.header("High Performers")
-    trophy = "🏆 "
+
     # ---- Month and Day Filters ----
     month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
     month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="summary_month")
@@ -451,6 +451,8 @@ elif active_tab == "High Performers":
                 df[shift] = df[shift].fillna(0)
         return df
 
+    trophy = "🏆 "
+
     # --- Top Picker Per Day (Total Carts Counted) with All Station Types per User ---
     top_carts_day = (
         filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
@@ -490,39 +492,34 @@ elif active_tab == "High Performers":
         "If a top picker used multiple station types in a day, all will be displayed below.*",
         unsafe_allow_html=True
     )
-
-    # --- AG-Grid Display and Drilldown ---
-    aggrid_data = top_picker_per_day[['Date', 'Top Picker', 'All Station Types', 'Total Carts Counted']].copy()
-    gb = GridOptionsBuilder.from_dataframe(aggrid_data)
-    gb.configure_selection(selection_mode='single', use_checkbox=False)
-    gb.configure_pagination()
-    gb.configure_default_column(resizable=True, filterable=True, sortable=True)
-    grid_options = gb.build()
-
-    aggrid_response = AgGrid(
-        aggrid_data,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        allow_unsafe_jscode=True,
-        enable_enterprise_modules=False,
-        height=300,
-        fit_columns_on_grid_load=True,
+    st.dataframe(
+        top_picker_per_day[['Date', 'Top Picker', 'All Station Types', 'Total Carts Counted']],
+        use_container_width=True,
+        hide_index=True
     )
 
-    sel = aggrid_response.get('selected_rows', None)
-    selected_row = None
-    if isinstance(sel, list) and len(sel) > 0 and isinstance(sel[0], dict):
-        selected_row = sel[0]
+    # --- Drilldown selection for picker details ---
+    drilldown_row = None
+    if not top_picker_per_day.empty:
+        drilldown_options = top_picker_per_day[['Date', 'Top Picker']].apply(lambda row: f"{row['Date']} - {row['Top Picker']}", axis=1)
+        drilldown_selection = st.selectbox(
+            "Drill down into picker details:",
+            ["None"] + list(drilldown_options),
+            index=0,
+            key="drilldown_picker"
+        )
+        if drilldown_selection != "None":
+            selected_date, selected_picker = drilldown_selection.split(" - ", 1)
+            selected_picker = selected_picker.replace("🏆 ", "")
+            drilldown_row = (selected_date, selected_picker)
 
-    if selected_row is not None:
-        selected_date = selected_row.get('Date')
-        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
-        st.markdown(f"### Details for {selected_picker} on {selected_date}")
+    if drilldown_row:
         detailed_rows = data[
-            (data['Date'].dt.strftime('%d-%m-%Y') == selected_date)
-            & (data['Users'] == selected_picker)
+            (data['Date'].dt.strftime('%d-%m-%Y') == drilldown_row[0]) &
+            (data['Users'] == drilldown_row[1])
         ].copy()
         if not detailed_rows.empty:
+            st.markdown(f"### Details for {drilldown_row[1]} on {drilldown_row[0]}")
             show_cols = [
                 "Date", "Time", "Station Id", "Station Type", "Drawers Counted",
                 "Damaged Drawers Processed", "Damaged Products Processed", "Rogues Processed",
@@ -538,27 +535,27 @@ elif active_tab == "High Performers":
 
     # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
     top_carts_shift = (
-        filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
-    )
+            filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+        )
     idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
     top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
     top_picker_per_shift = top_picker_per_shift.rename(columns={
-        'Users': 'Top Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
+            'Users': 'Top Picker',
+            'Carts Counted Per Hour': 'Total Carts Counted'
+        })
     if not top_picker_per_shift.empty:
         top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
         top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
         top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
+                lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+            )
         # Set shift as categorical to enforce AM > PM > Night order
         shift_order = ['AM', 'PM', 'Night']
         top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
         top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
         st.subheader("Top Picker Per Day (Shift Based)")
         st.dataframe(
-            top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+        top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
             use_container_width=True,
             hide_index=True
         )
