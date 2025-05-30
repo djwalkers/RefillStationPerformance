@@ -408,8 +408,6 @@ elif active_tab == "Monthly Dashboard":
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-
 elif active_tab == "High Performers":
     st.header("High Performers")
 
