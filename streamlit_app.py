@@ -496,7 +496,7 @@ elif active_tab == "High Performers":
     # --- AG-Grid Display and Drilldown ---
     aggrid_data = top_picker_per_day[['Date', 'Top Picker', 'All Station Types', 'Total Carts Counted']].copy()
     gb = GridOptionsBuilder.from_dataframe(aggrid_data)
-    gb.configure_selection(selection_mode='single', use_checkbox=True)
+    gb.configure_selection(selection_mode='single', use_checkbox=False)
     gb.configure_pagination()
     gb.configure_default_column(resizable=True, filterable=True, sortable=True)
     grid_options = gb.build()
