@@ -408,6 +408,8 @@ elif active_tab == "Monthly Dashboard":
     st.markdown(f"**Current Month:** {current_month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+
 elif active_tab == "High Performers":
     st.header("High Performers")
 
@@ -511,9 +513,12 @@ elif active_tab == "High Performers":
         fit_columns_on_grid_load=True,
     )
 
-    sel = aggrid_response.get('selected_rows', [])
-    if sel and isinstance(sel, list) and isinstance(sel[0], dict):
+    sel = aggrid_response.get('selected_rows', None)
+    selected_row = None
+    if isinstance(sel, list) and len(sel) > 0 and isinstance(sel[0], dict):
         selected_row = sel[0]
+
+    if selected_row:
         selected_date = selected_row.get('Date')
         selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
         st.markdown(f"### Details for {selected_picker} on {selected_date}")
@@ -537,27 +542,27 @@ elif active_tab == "High Performers":
 
     # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
     top_carts_shift = (
-        filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
-    )
+            filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+        )
     idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
     top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
     top_picker_per_shift = top_picker_per_shift.rename(columns={
-        'Users': 'Top Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
+            'Users': 'Top Picker',
+            'Carts Counted Per Hour': 'Total Carts Counted'
+        })
     if not top_picker_per_shift.empty:
         top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
         top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
         top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
+                lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+            )
         # Set shift as categorical to enforce AM > PM > Night order
         shift_order = ['AM', 'PM', 'Night']
         top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
         top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
         st.subheader("Top Picker Per Day (Shift Based)")
         st.dataframe(
-            top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+        top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
             use_container_width=True,
             hide_index=True
         )
