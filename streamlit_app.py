@@ -232,6 +232,7 @@ if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
     data['Carts Counted Per Hour'] = (
         pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
     ).fillna(0).round(2).astype(float)
+    # Silence future warning:
     data = data.infer_objects(copy=False)
 else:
     data['Carts Counted Per Hour'] = 0.0
@@ -256,37 +257,31 @@ def clean_grouped_users(df, value_column):
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
-# --- UPDATED BAR CHART FOR READABILITY ---
-def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11, default_top_n=20):
+def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11):
     if df.empty or x not in df.columns or y not in df.columns:
         st.info("No data to display for this selection.")
         return
 
-    # Add a slider to pick top N
-    max_n = min(50, len(df))
-    n_users = st.slider("How many top users to display?", 5, max_n, default_top_n, key=f"slider_{title}")
-    df_sorted = df.sort_values(by=x, ascending=False).head(n_users)
-
-    # Optional: Multiselect to search users
-    users = df[y].unique()
-    selected_users = st.multiselect("Or search/select users to display:", users, key=f"multiselect_{title}")
-    if selected_users:
-        df_sorted = df[df[y].isin(selected_users)]
-
     total = df[x].sum()
-    total_label = f"{total:.2f}" if 0 < total < 1 else f"{int(round(total))}"
+    if 0 < total < 1:
+        total_label = f"{total:.2f}"
+    else:
+        total_label = f"{int(round(total))}"
     st.markdown(
         f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total_label}</div>",
         unsafe_allow_html=True,
     )
 
-    df_sorted = df_sorted.sort_values(by=x, ascending=True)
+    df = df.sort_values(by=x, ascending=True)
     fig, ax = plt.subplots(figsize=figsize)
-    bars = ax.barh(df_sorted[y], df_sorted[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
+    bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     for bar in bars:
         width = bar.get_width()
         if width > 0:
-            label = f"{width:.2f}" if 0 < width < 1 else f"{int(round(width))}"
+            if 0 < width < 1:
+                label = f"{width:.2f}"
+            else:
+                label = f"{int(round(width))}"
             ax.annotate(label,
                         xy=(width, bar.get_y() + bar.get_height() / 2),
                         xytext=(3, 0), textcoords="offset points",
@@ -294,14 +289,13 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
     ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
     ax.set_title(title, color=FG_COLOR, weight="bold", fontsize=axis_fontsize+1)
-    ax.tick_params(axis='y', colors=FG_COLOR, labelsize=max(label_fontsize-2, 8))  # Smaller labels
+    ax.tick_params(axis='y', colors=FG_COLOR, labelsize=label_fontsize-1)
     ax.tick_params(axis='x', colors=FG_COLOR, labelsize=label_fontsize)
     fig.patch.set_facecolor(BG_COLOR)
     ax.set_facecolor(BG_COLOR)
     plt.tight_layout()
     st.pyplot(fig)
 
-# --- Dashboard Tab (Unchanged) ---
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
     if month_filter and "Month" in df.columns:
@@ -478,6 +472,7 @@ elif active_tab == "High Performers":
             .reset_index()
             .rename(columns={'Users': 'Top Picker', 'Station Type': 'All Station Types'})
         )
+        # Merge all station types back into top_picker_per_day
         top_picker_per_day = top_picker_per_day.merge(
             station_types_per_user,
             left_on=['Date', 'Top Picker'],
@@ -493,57 +488,38 @@ elif active_tab == "High Performers":
 
     st.subheader("Top Picker Per Day (All Hours)")
     st.markdown(
-        "*Click a row for picker details below. If a top picker used multiple station types in a day, all are shown.*",
+        "*Note: This table sums all picks by each user within the full day, regardless of shift. "
+        "If a top picker used multiple station types in a day, all will be displayed below.*",
         unsafe_allow_html=True
     )
-
-    # --- AG-Grid Display and Drilldown ---
-    aggrid_data = top_picker_per_day[['Date', 'Top Picker', 'All Station Types', 'Total Carts Counted']].copy()
-    gb = GridOptionsBuilder.from_dataframe(aggrid_data)
-    gb.configure_selection(selection_mode='single', use_checkbox=False)
-    gb.configure_pagination()
-    gb.configure_default_column(resizable=True, filterable=True, sortable=True)
-    grid_options = gb.build()
-
-    aggrid_response = AgGrid(
-        aggrid_data,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        allow_unsafe_jscode=True,
-        enable_enterprise_modules=False,
-        height=300,
-        fit_columns_on_grid_load=True,
+    st.dataframe(
+        top_picker_per_day[['Date', 'Top Picker', 'All Station Types', 'Total Carts Counted']],
+        use_container_width=True,
+        hide_index=True
     )
 
-    sel = aggrid_response.get('selected_rows', [])
-    selected_row = None
-    if isinstance(sel, list) and len(sel) > 0 and isinstance(sel[0], dict):
-        selected_row = sel[0]
-        selected_date = selected_row.get('Date')
-        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '').strip()
-    else:
-        selected_date, selected_picker = None, None
+    # --- Drilldown selection for picker details ---
+    drilldown_row = None
+    if not top_picker_per_day.empty:
+        drilldown_options = top_picker_per_day[['Date', 'Top Picker']].apply(lambda row: f"{row['Date']} - {row['Top Picker']}", axis=1)
+        drilldown_selection = st.selectbox(
+            "Drill down into picker details:",
+            ["None"] + list(drilldown_options),
+            index=0,
+            key="drilldown_picker"
+        )
+        if drilldown_selection != "None":
+            selected_date, selected_picker = drilldown_selection.split(" - ", 1)
+            selected_picker = selected_picker.replace("🏆 ", "")
+            drilldown_row = (selected_date, selected_picker)
 
-    # DEBUG
-       # st.write("DEBUG: sel=", sel)
-       # st.write("DEBUG: selected_row=", selected_row)
-       # st.write("DEBUG: selected_date=", selected_date, "selected_picker=", selected_picker)
-
-    if selected_date and selected_picker:
-        st.markdown(f"### Details for {selected_picker} on {selected_date}")
-        # Try exact match, then fallback to stripped/lower
+    if drilldown_row:
         detailed_rows = data[
-            (data['Date'].dt.strftime('%d-%m-%Y') == selected_date) &
-            (data['Users'].str.strip() == selected_picker)
+            (data['Date'].dt.strftime('%d-%m-%Y') == drilldown_row[0]) &
+            (data['Users'] == drilldown_row[1])
         ].copy()
-        if detailed_rows.empty:
-            picker_no_emoji = re.sub(r'[^\w\s]', '', selected_picker).lower().strip()
-            data['Users_clean'] = data['Users'].str.replace(r'[^\w\s]', '', regex=True).str.lower().str.strip()
-            detailed_rows = data[
-                (data['Date'].dt.strftime('%d-%m-%Y') == selected_date)
-                & (data['Users_clean'] == picker_no_emoji)
-            ].copy()
         if not detailed_rows.empty:
+            st.markdown(f"### Details for {drilldown_row[1]} on {drilldown_row[0]}")
             show_cols = [
                 "Date", "Time", "Station Id", "Station Type", "Drawers Counted",
                 "Damaged Drawers Processed", "Damaged Products Processed", "Rogues Processed",
@@ -556,8 +532,6 @@ elif active_tab == "High Performers":
             )
         else:
             st.info("No detailed records found for this picker on that day.")
-    else:
-        st.info("Select a row above to view picker details.")
 
     # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
     top_carts_shift = (
@@ -605,6 +579,7 @@ elif active_tab == "High Performers":
     exclude_types_lower = [t.lower() for t in exclude_types]
     filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
 
+    # Filter out NaN station types as well as excluded ones
     filtered_data = filtered_data[
         filtered_data['Station Type Lower'].notna() &
         (filtered_data['Station Type Lower'] != 'nan') &
