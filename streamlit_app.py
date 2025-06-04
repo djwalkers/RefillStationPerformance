@@ -88,9 +88,9 @@ def is_valid_filename(filename):
 # ---- Automated File Uploader (GitHub API) ----
 st.markdown("### Upload new data file to GitHub")
 uploaded_file = st.file_uploader(
-    "Add a CSV file to be pushed directly to the GitHub Data folder.",
+    "Add a CSV file.",
     type="csv",
-    help="Uploads to the Data folder in the GitHub repo using the GitHub API."
+    help="Uploads to the Data folder"
 )
 
 if uploaded_file is not None:
