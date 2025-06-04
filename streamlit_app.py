@@ -23,7 +23,7 @@ def auto_refresh(interval_sec=30):
 auto_refresh(300)  # Refresh every 5 minutes
 
 # Example of usage in your data loader function:
-@st.cache_data(show_spinner="Loading raw data from GitHub...")
+@st.cache_data(show_spinner="Loading data")
 def load_raw_data(cachebuster=0):
     # ... your GitHub data loading code ...
     return df  # or whatever you return
