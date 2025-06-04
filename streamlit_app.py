@@ -521,15 +521,16 @@ elif active_tab == "High Performers":
         fit_columns_on_grid_load=True,
     )
 
+    # -------- DRILLDOWN SECTION (shows details for selected row) -----------
     sel = aggrid_response.get('selected_rows', None)
     selected_row = None
+    selected_date = None
+    selected_picker = None
 
     if isinstance(sel, list) and len(sel) > 0 and isinstance(sel[0], dict):
         selected_row = sel[0]
         selected_date = selected_row.get('Date')
         selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
-    else:
-        selected_date, selected_picker = None, None
 
     if selected_date and selected_picker:
         st.markdown(f"### Details for {selected_picker} on {selected_date}")
