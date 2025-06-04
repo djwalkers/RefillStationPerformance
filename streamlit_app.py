@@ -9,10 +9,20 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import re
 from datetime import datetime
 import time
-import random  # <-- Added for cachebuster
+import random
 
-# ---- AUTO-REFRESH (checks every 5 minutes and busts cache) ----
-def auto_refresh(interval_sec=30):
+# --- CONFIG ---
+GITHUB_USER = "djwalkers"
+REPO_NAME = "RefillStationPerformance"
+DATA_FOLDER = "Data"
+FILES_FOLDER = "Files"
+
+# --- FILE URLS ---
+date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
+station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
+
+# --- AUTO-REFRESH (every 5 minutes, increments cachebuster to reload data) ---
+def auto_refresh(interval_sec=300):
     if 'last_refresh' not in st.session_state:
         st.session_state['last_refresh'] = time.time()
         st.session_state['cachebuster'] = random.randint(0, int(1e8))
@@ -20,18 +30,10 @@ def auto_refresh(interval_sec=30):
         st.session_state['last_refresh'] = time.time()
         st.session_state['cachebuster'] = random.randint(0, int(1e8))
         st.experimental_rerun()
-auto_refresh(300)  # Refresh every 5 minutes
+auto_refresh(300)
 
-# Example of usage in your data loader function:
-@st.cache_data(show_spinner="Loading data")
-def load_raw_data(cachebuster=0):
-    # ... your GitHub data loading code ...
-    return df  # or whatever you return
-
-# When you call the loader, pass the cachebuster value
-raw_data = load_raw_data(st.session_state.get('cachebuster', 0))
-
-
+if 'cachebuster' not in st.session_state:
+    st.session_state['cachebuster'] = random.randint(0, int(1e8))
 
 PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
@@ -133,25 +135,17 @@ if uploaded_file is not None:
             if put_response.status_code in [200, 201]:
                 st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
                 st.info("Refreshing dashboard to include the new data...")
-                st.rerun()
+                # --- CACHEBUSTER ON UPLOAD ---
+                st.session_state['cachebuster'] = random.randint(0, int(1e8))
+                st.experimental_rerun()
             else:
                 st.error(f"GitHub upload failed: {put_response.json().get('message', put_response.text)}")
         except Exception as ex:
             st.error(f"Uploader failed: {ex}")
 
-# --- CONFIG ---
-GITHUB_USER = "djwalkers"
-REPO_NAME = "RefillStationPerformance"
-DATA_FOLDER = "Data"
-FILES_FOLDER = "Files"
-
-# --- FILE URLS ---
-date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
-station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
-
 # --- 1. LOAD RAW DATA FILES FROM GITHUB (AUTHENTICATED) ---
 @st.cache_data(show_spinner="Loading raw data from GitHub...")
-def load_raw_data():
+def load_raw_data(cachebuster=0):
     api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
     github_token = st.secrets["github_token"]
     headers = {
@@ -190,8 +184,15 @@ def load_reference_tables():
     station = pd.read_excel(station_url, sheet_name=0)
     return date_dim, station
 
-raw_data = load_raw_data()
+# --- LOAD DATA WITH CACHEBUSTER ---
+raw_data = load_raw_data(st.session_state['cachebuster'])
 date_dim, station = load_reference_tables()
+
+if raw_data.empty:
+    st.error("No data files found in the Data folder. Please check your GitHub repository.")
+    st.stop()
+
+# --- [rest of your dashboard code below this, unchanged!] ---
 
 if raw_data.empty:
     st.error("No data files found in the Data folder. Please check your GitHub repository.")
