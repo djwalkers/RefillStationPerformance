@@ -70,6 +70,7 @@ tab_labels = [
     "Weekly Dashboard",
     "Monthly Dashboard",
     "High Performers"
+    "Low Performers"
 ]
 if "active_tab" not in st.session_state:
     st.session_state["active_tab"] = tab_labels[0]
@@ -627,4 +628,130 @@ elif active_tab == "High Performers":
     breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
     st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
     st.dataframe(breakdown, use_container_width=True, hide_index=True)
+elif active_tab == "Low Performers":
+    st.header("Low Performers")
+
+    # ---- Month and Day Filters ----
+    month_options = sorted(data['Date'].dt.strftime('%B').dropna().unique())
+    month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="low_month")
+    filtered_data = data.copy()
+    if month_sel != "All":
+        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%B') == month_sel]
+
+    day_options = sorted(filtered_data['Date'].dt.strftime('%d-%m-%Y').dropna().unique())
+    day_sel = st.selectbox("Filter by Day:", ["All"] + day_options, key="low_day")
+    if day_sel != "All":
+        filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%d-%m-%Y') == day_sel]
+
+    # Assign shift based on time
+    def assign_shift(time_str):
+        if pd.isna(time_str):
+            return "Unknown"
+        try:
+            hour, minute = map(int, str(time_str).split(":"))
+        except:
+            return "Unknown"
+        total_minutes = hour * 60 + minute
+        if 6*60 <= total_minutes <= 14*60:
+            return "AM"
+        elif 14*60 < total_minutes <= 22*60:
+            return "PM"
+        else:
+            return "Night"
+    filtered_data['Shift'] = filtered_data['Time'].apply(assign_shift)
+
+    def ensure_shift_columns(df, index_col="Date"):
+        for shift in ["AM", "PM", "Night"]:
+            if shift not in df.columns:
+                df[shift] = 0
+        cols = [index_col, "AM", "PM", "Night"]
+        df = df[[c for c in cols if c in df.columns]]
+        for shift in ["AM", "PM", "Night"]:
+            if shift in df.columns:
+                df[shift] = df[shift].fillna(0)
+        return df
+
+    turtle = "🐢 "  # Use a turtle emoji for fun!
+
+    # --- Low Picker Per Day (Total Carts Counted) with All Station Types per User ---
+    low_carts_day = (
+        filtered_data.groupby(['Date', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+    )
+    # Only consider users with more than zero carts counted, to avoid blank/bad data
+    low_carts_day = low_carts_day[low_carts_day['Carts Counted Per Hour'] > 0]
+
+    idx = low_carts_day.groupby('Date')['Carts Counted Per Hour'].idxmin()
+    low_picker_per_day = low_carts_day.loc[idx].reset_index(drop=True)
+    low_picker_per_day = low_picker_per_day.rename(columns={
+        'Users': 'Low Picker',
+        'Carts Counted Per Hour': 'Total Carts Counted'
+    })
+
+    if not low_picker_per_day.empty:
+        # For each row, collect ALL unique Station Types for that user on that date
+        station_types_per_user = (
+            filtered_data.groupby(['Date', 'Users'])['Station Type']
+            .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
+            .reset_index()
+            .rename(columns={'Users': 'Low Picker', 'Station Type': 'All Station Types'})
+        )
+        # Merge all station types back into low_picker_per_day
+        low_picker_per_day = low_picker_per_day.merge(
+            station_types_per_user,
+            left_on=['Date', 'Low Picker'],
+            right_on=['Date', 'Low Picker'],
+            how='left'
+        )
+
+        low_picker_per_day['Date'] = pd.to_datetime(low_picker_per_day['Date']).dt.strftime('%d-%m-%Y')
+        low_picker_per_day['Low Picker'] = turtle + low_picker_per_day['Low Picker'].astype(str)
+        low_picker_per_day['Total Carts Counted'] = low_picker_per_day['Total Carts Counted'].apply(
+            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+        )
+
+    st.subheader("Lowest Picker Per Day (All Hours)")
+    st.markdown(
+        "*Note: This table shows the lowest performer by day (but only if they counted carts!).*",
+        unsafe_allow_html=True
+    )
+    st.dataframe(
+        low_picker_per_day[['Date', 'Low Picker', 'All Station Types', 'Total Carts Counted']],
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --- Drilldown selection for picker details ---
+    drilldown_row = None
+    if not low_picker_per_day.empty:
+        drilldown_options = low_picker_per_day[['Date', 'Low Picker']].apply(lambda row: f"{row['Date']} - {row['Low Picker']}", axis=1)
+        drilldown_selection = st.selectbox(
+            "Drill down into picker details:",
+            ["None"] + list(drilldown_options),
+            index=0,
+            key="low_drilldown_picker"
+        )
+        if drilldown_selection != "None":
+            selected_date, selected_picker = drilldown_selection.split(" - ", 1)
+            selected_picker = selected_picker.replace("🐢 ", "")
+            drilldown_row = (selected_date, selected_picker)
+
+    if drilldown_row:
+        detailed_rows = data[
+            (data['Date'].dt.strftime('%d-%m-%Y') == drilldown_row[0]) &
+            (data['Users'] == drilldown_row[1])
+        ].copy()
+        if not detailed_rows.empty:
+            st.markdown(f"### Details for {drilldown_row[1]} on {drilldown_row[0]}")
+            show_cols = [
+                "Date", "Time", "Station Id", "Station Type", "Drawers Counted",
+                "Damaged Drawers Processed", "Damaged Products Processed", "Rogues Processed",
+                "Carts Counted Per Hour", "Shift"
+            ]
+            show_cols = [c for c in show_cols if c in detailed_rows.columns]
+            st.dataframe(
+                detailed_rows[show_cols].sort_values("Time"),
+                use_container_width=True, hide_index=True
+            )
+        else:
+            st.info("No detailed records found for this picker on that day.")
 
