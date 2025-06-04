@@ -69,7 +69,7 @@ tab_labels = [
     "Hourly Dashboard", 
     "Weekly Dashboard",
     "Monthly Dashboard",
-    "High Performers"
+    "High Performers",
     "Low Performers"
 ]
 if "active_tab" not in st.session_state:
