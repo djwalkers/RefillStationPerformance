@@ -429,10 +429,6 @@ elif active_tab == "High Performers":
     if day_sel != "All":
         filtered_data = filtered_data[filtered_data['Date'].dt.strftime('%d-%m-%Y') == day_sel]
 
-    if filtered_data.empty:
-        st.info("No data available for the selected filters.")
-        st.stop()
-
     # Assign shift based on time
     def assign_shift(time_str):
         if pd.isna(time_str):
@@ -521,7 +517,7 @@ elif active_tab == "High Performers":
         fit_columns_on_grid_load=True,
     )
 
-    # -------- DRILLDOWN SECTION (shows details for selected row) -----------
+    # --- Drilldown by row click ---
     sel = aggrid_response.get('selected_rows', None)
     selected_row = None
     selected_date = None
@@ -530,13 +526,15 @@ elif active_tab == "High Performers":
     if isinstance(sel, list) and len(sel) > 0 and isinstance(sel[0], dict):
         selected_row = sel[0]
         selected_date = selected_row.get('Date')
-        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '')
+        selected_picker = selected_row.get('Top Picker', '').replace(trophy, '').strip()
+        st.write("DEBUG: Selected Row", selected_row)  # Debug line
+        st.write("DEBUG: Looking for picker:", selected_picker, "on date:", selected_date)
 
     if selected_date and selected_picker:
         st.markdown(f"### Details for {selected_picker} on {selected_date}")
         detailed_rows = data[
             (data['Date'].dt.strftime('%d-%m-%Y') == selected_date)
-            & (data['Users'] == selected_picker)
+            & (data['Users'].str.strip() == selected_picker)
         ].copy()
         if not detailed_rows.empty:
             show_cols = [
@@ -551,29 +549,32 @@ elif active_tab == "High Performers":
             )
         else:
             st.info("No detailed records found for this picker on that day.")
+    else:
+        st.info("Select a row above to view picker details.")
 
     # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
     top_carts_shift = (
-            filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
-        )
+        filtered_data.groupby(['Date', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+    )
     idx_shift = top_carts_shift.groupby(['Date', 'Shift'])['Carts Counted Per Hour'].idxmax()
     top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
     top_picker_per_shift = top_picker_per_shift.rename(columns={
-            'Users': 'Top Picker',
-            'Carts Counted Per Hour': 'Total Carts Counted'
-        })
+        'Users': 'Top Picker',
+        'Carts Counted Per Hour': 'Total Carts Counted'
+    })
     if not top_picker_per_shift.empty:
         top_picker_per_shift['Date'] = pd.to_datetime(top_picker_per_shift['Date']).dt.strftime('%d-%m-%Y')
         top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
         top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
-                lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-            )
+            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+        )
+        # Set shift as categorical to enforce AM > PM > Night order
         shift_order = ['AM', 'PM', 'Night']
         top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
         top_picker_per_shift = top_picker_per_shift.sort_values(['Date', 'Shift'])
         st.subheader("Top Picker Per Day (Shift Based)")
         st.dataframe(
-        top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
+            top_picker_per_shift[['Date', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
             use_container_width=True,
             hide_index=True
         )
@@ -597,6 +598,7 @@ elif active_tab == "High Performers":
     exclude_types_lower = [t.lower() for t in exclude_types]
     filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
 
+    # Filter out NaN station types as well as excluded ones
     filtered_data = filtered_data[
         filtered_data['Station Type Lower'].notna() &
         (filtered_data['Station Type Lower'] != 'nan') &
@@ -613,4 +615,3 @@ elif active_tab == "High Performers":
     breakdown = ensure_shift_columns(breakdown, index_col="Station Type")
     st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags)")
     st.dataframe(breakdown, use_container_width=True, hide_index=True)
-
