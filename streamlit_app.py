@@ -8,17 +8,29 @@ from urllib.parse import quote
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import re
 from datetime import datetime
-import time  # <-- Added for auto-refresh
+import time
+import random  # <-- Added for cachebuster
 
-# ---- AUTO-REFRESH (checks every 5 minutes) ----
+# ---- AUTO-REFRESH (checks every 5 minutes and busts cache) ----
 def auto_refresh(interval_sec=300):
     if 'last_refresh' not in st.session_state:
         st.session_state['last_refresh'] = time.time()
-    # If time since last refresh is more than interval, rerun
+        st.session_state['cachebuster'] = random.randint(0, int(1e8))
     if time.time() - st.session_state['last_refresh'] > interval_sec:
         st.session_state['last_refresh'] = time.time()
+        st.session_state['cachebuster'] = random.randint(0, int(1e8))
         st.experimental_rerun()
-auto_refresh(300)  # Refresh every 5 minutes (change as needed)
+auto_refresh(300)  # Refresh every 5 minutes
+
+# Example of usage in your data loader function:
+@st.cache_data(show_spinner="Loading raw data from GitHub...")
+def load_raw_data(cachebuster=0):
+    # ... your GitHub data loading code ...
+    return df  # or whatever you return
+
+# When you call the loader, pass the cachebuster value
+raw_data = load_raw_data(st.session_state.get('cachebuster', 0))
+
 
 
 PRIMARY_COLOR = "#DA362C"
