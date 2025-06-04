@@ -144,7 +144,7 @@ if uploaded_file is not None:
             st.error(f"Uploader failed: {ex}")
 
 # --- 1. LOAD RAW DATA FILES FROM GITHUB (AUTHENTICATED) ---
-@st.cache_data(show_spinner="Loading raw data from GitHub...")
+@st.cache_data(show_spinner="Loading data")
 def load_raw_data(cachebuster=0):
     api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
     github_token = st.secrets["github_token"]
