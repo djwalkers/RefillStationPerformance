@@ -8,16 +8,7 @@ from urllib.parse import quote
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import re
 from datetime import datetime
-# --- AUTO-REFRESH SNIPPET ---
-def auto_refresh(interval_sec=300):
-    if 'last_refresh' not in st.session_state:
-        st.session_state['last_refresh'] = time.time()
-    if time.time() - st.session_state['last_refresh'] > interval_sec:
-        st.session_state['last_refresh'] = time.time()
-        st.experimental_rerun()
-auto_refresh(300)  # Refresh every 5 minutes (adjust as needed)
 
-# Your theme, logo, and Streamlit config comes after this
 PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
 FG_COLOR = "#FFFFFF"
