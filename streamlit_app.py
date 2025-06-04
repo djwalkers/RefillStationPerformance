@@ -232,7 +232,6 @@ if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
     data['Carts Counted Per Hour'] = (
         pd.to_numeric(data['Drawers Counted'], errors='coerce') / drawer_avg
     ).fillna(0).round(2).astype(float)
-    # Silence future warning:
     data = data.infer_objects(copy=False)
 else:
     data['Carts Counted Per Hour'] = 0.0
@@ -257,31 +256,37 @@ def clean_grouped_users(df, value_column):
     temp = temp.sort_values(value_column, ascending=False)
     return temp
 
-def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11):
+# --- UPDATED BAR CHART FOR READABILITY ---
+def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11, default_top_n=20):
     if df.empty or x not in df.columns or y not in df.columns:
         st.info("No data to display for this selection.")
         return
 
+    # Add a slider to pick top N
+    max_n = min(50, len(df))
+    n_users = st.slider("How many top users to display?", 5, max_n, default_top_n, key=f"slider_{title}")
+    df_sorted = df.sort_values(by=x, ascending=False).head(n_users)
+
+    # Optional: Multiselect to search users
+    users = df[y].unique()
+    selected_users = st.multiselect("Or search/select users to display:", users, key=f"multiselect_{title}")
+    if selected_users:
+        df_sorted = df[df[y].isin(selected_users)]
+
     total = df[x].sum()
-    if 0 < total < 1:
-        total_label = f"{total:.2f}"
-    else:
-        total_label = f"{int(round(total))}"
+    total_label = f"{total:.2f}" if 0 < total < 1 else f"{int(round(total))}"
     st.markdown(
         f"<div style='color:{FG_COLOR}; font-size:18px; font-weight:bold; margin-bottom:10px'>Total {x.replace('_',' ')}: {total_label}</div>",
         unsafe_allow_html=True,
     )
 
-    df = df.sort_values(by=x, ascending=True)
+    df_sorted = df_sorted.sort_values(by=x, ascending=True)
     fig, ax = plt.subplots(figsize=figsize)
-    bars = ax.barh(df[y], df[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
+    bars = ax.barh(df_sorted[y], df_sorted[x], color=BAR_COLOR, edgecolor=BAR_EDGE, linewidth=2)
     for bar in bars:
         width = bar.get_width()
         if width > 0:
-            if 0 < width < 1:
-                label = f"{width:.2f}"
-            else:
-                label = f"{int(round(width))}"
+            label = f"{width:.2f}" if 0 < width < 1 else f"{int(round(width))}"
             ax.annotate(label,
                         xy=(width, bar.get_y() + bar.get_height() / 2),
                         xytext=(3, 0), textcoords="offset points",
@@ -289,13 +294,14 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     ax.set_xlabel(x.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
     ax.set_ylabel(y.replace('_', ' '), color=FG_COLOR, weight="bold", fontsize=axis_fontsize)
     ax.set_title(title, color=FG_COLOR, weight="bold", fontsize=axis_fontsize+1)
-    ax.tick_params(axis='y', colors=FG_COLOR, labelsize=label_fontsize-1)
+    ax.tick_params(axis='y', colors=FG_COLOR, labelsize=max(label_fontsize-2, 8))  # Smaller labels
     ax.tick_params(axis='x', colors=FG_COLOR, labelsize=label_fontsize)
     fig.patch.set_facecolor(BG_COLOR)
     ax.set_facecolor(BG_COLOR)
     plt.tight_layout()
     st.pyplot(fig)
 
+# --- Dashboard Tab (Unchanged) ---
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
     if month_filter and "Month" in df.columns:
