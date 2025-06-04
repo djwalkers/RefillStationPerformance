@@ -525,9 +525,9 @@ elif active_tab == "High Performers":
         selected_date, selected_picker = None, None
 
     # DEBUG
-        st.write("DEBUG: sel=", sel)
-        st.write("DEBUG: selected_row=", selected_row)
-        st.write("DEBUG: selected_date=", selected_date, "selected_picker=", selected_picker)
+       # st.write("DEBUG: sel=", sel)
+       # st.write("DEBUG: selected_row=", selected_row)
+       # st.write("DEBUG: selected_date=", selected_date, "selected_picker=", selected_picker)
 
     if selected_date and selected_picker:
         st.markdown(f"### Details for {selected_picker} on {selected_date}")
