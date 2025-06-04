@@ -29,7 +29,7 @@ def auto_refresh(interval_sec=300):
     if time.time() - st.session_state['last_refresh'] > interval_sec:
         st.session_state['last_refresh'] = time.time()
         st.session_state['cachebuster'] = random.randint(0, int(1e8))
-        st.experimental_rerun()
+        st.rerun()
 auto_refresh(300)
 
 if 'cachebuster' not in st.session_state:
