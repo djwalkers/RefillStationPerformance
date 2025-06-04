@@ -22,7 +22,7 @@ date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/mai
 station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
 
 # --- AUTO-REFRESH (every 5 minutes, increments cachebuster to reload data) ---
-def auto_refresh(interval_sec=300):
+def auto_refresh(interval_sec=30):
     if 'last_refresh' not in st.session_state:
         st.session_state['last_refresh'] = time.time()
         st.session_state['cachebuster'] = random.randint(0, int(1e8))
