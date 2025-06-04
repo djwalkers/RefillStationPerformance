@@ -8,6 +8,18 @@ from urllib.parse import quote
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import re
 from datetime import datetime
+import time  # <-- Added for auto-refresh
+
+# ---- AUTO-REFRESH (checks every 5 minutes) ----
+def auto_refresh(interval_sec=300):
+    if 'last_refresh' not in st.session_state:
+        st.session_state['last_refresh'] = time.time()
+    # If time since last refresh is more than interval, rerun
+    if time.time() - st.session_state['last_refresh'] > interval_sec:
+        st.session_state['last_refresh'] = time.time()
+        st.experimental_rerun()
+auto_refresh(300)  # Refresh every 5 minutes (change as needed)
+
 
 PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
