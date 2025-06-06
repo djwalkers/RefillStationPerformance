@@ -425,36 +425,37 @@ elif active_tab == "High Performers":
 
     trophy = "🏆 "
 
-    # --- Top Picker Per Day (All Hours, by ShiftDate) ---
-    top_carts_day = (
-        filtered_data.groupby(['ShiftDate', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
-    )
-    idx = top_carts_day.groupby('ShiftDate')['Carts Counted Per Hour'].idxmax()
-    top_picker_per_day = top_carts_day.loc[idx].reset_index(drop=True)
-    top_picker_per_day = top_picker_per_day.rename(columns={
-        'Users': 'Top Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
+    # --- Top Picker Per Day (All Hours, by ShiftDate, SUM ACROSS STATION TYPES) ---
+user_day_total = (
+    filtered_data.groupby(['ShiftDate', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
+)
+idx = user_day_total.groupby('ShiftDate')['Carts Counted Per Hour'].idxmax()
+top_picker_per_day = user_day_total.loc[idx].reset_index(drop=True)
+top_picker_per_day = top_picker_per_day.rename(columns={
+    'Users': 'Top Picker',
+    'Carts Counted Per Hour': 'Total Carts Counted'
+})
 
-    # Attach all station types for display
-    if not top_picker_per_day.empty:
-        station_types_per_user = (
-            filtered_data.groupby(['ShiftDate', 'Users'])['Station Type']
-            .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
-            .reset_index()
-            .rename(columns={'Users': 'Top Picker', 'Station Type': 'All Station Types'})
-        )
-        top_picker_per_day = top_picker_per_day.merge(
-            station_types_per_user,
-            left_on=['ShiftDate', 'Top Picker'],
-            right_on=['ShiftDate', 'Top Picker'],
-            how='left'
-        )
-        top_picker_per_day['ShiftDate'] = pd.to_datetime(top_picker_per_day['ShiftDate']).dt.strftime('%d-%m-%Y')
-        top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
-        top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
+# Attach all station types for display
+if not top_picker_per_day.empty:
+    station_types_per_user = (
+        filtered_data.groupby(['ShiftDate', 'Users'])['Station Type']
+        .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
+        .reset_index()
+        .rename(columns={'Users': 'Top Picker', 'Station Type': 'All Station Types'})
+    )
+    top_picker_per_day = top_picker_per_day.merge(
+        station_types_per_user,
+        left_on=['ShiftDate', 'Top Picker'],
+        right_on=['ShiftDate', 'Top Picker'],
+        how='left'
+    )
+    top_picker_per_day['ShiftDate'] = pd.to_datetime(top_picker_per_day['ShiftDate']).dt.strftime('%d-%m-%Y')
+    top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
+    top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
+        lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+    )
+
 
     st.subheader("Top Picker Per Day (All Hours, by ShiftDate)")
     st.dataframe(
@@ -594,37 +595,38 @@ elif active_tab == "Low Performers":
 
     turtle = "🐢 "
 
-    # --- Low Picker Per Day (All Hours, by ShiftDate) ---
-    low_carts_day = (
-        filtered_data.groupby(['ShiftDate', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
-    )
-    low_carts_day = low_carts_day[low_carts_day['Carts Counted Per Hour'] > 0]
-    idx = low_carts_day.groupby('ShiftDate')['Carts Counted Per Hour'].idxmin()
-    low_picker_per_day = low_carts_day.loc[idx].reset_index(drop=True)
-    low_picker_per_day = low_picker_per_day.rename(columns={
-        'Users': 'Low Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
+    # --- Lowest Picker Per Day (All Hours, by ShiftDate, SUM ACROSS STATION TYPES) ---
+user_day_total = (
+    filtered_data.groupby(['ShiftDate', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
+)
+user_day_total = user_day_total[user_day_total['Carts Counted Per Hour'] > 0]
+idx = user_day_total.groupby('ShiftDate')['Carts Counted Per Hour'].idxmin()
+low_picker_per_day = user_day_total.loc[idx].reset_index(drop=True)
+low_picker_per_day = low_picker_per_day.rename(columns={
+    'Users': 'Low Picker',
+    'Carts Counted Per Hour': 'Total Carts Counted'
+})
 
-    # Attach all station types for display
-    if not low_picker_per_day.empty:
-        station_types_per_user = (
-            filtered_data.groupby(['ShiftDate', 'Users'])['Station Type']
-            .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
-            .reset_index()
-            .rename(columns={'Users': 'Low Picker', 'Station Type': 'All Station Types'})
-        )
-        low_picker_per_day = low_picker_per_day.merge(
-            station_types_per_user,
-            left_on=['ShiftDate', 'Low Picker'],
-            right_on=['ShiftDate', 'Low Picker'],
-            how='left'
-        )
-        low_picker_per_day['ShiftDate'] = pd.to_datetime(low_picker_per_day['ShiftDate']).dt.strftime('%d-%m-%Y')
-        low_picker_per_day['Low Picker'] = turtle + low_picker_per_day['Low Picker'].astype(str)
-        low_picker_per_day['Total Carts Counted'] = low_picker_per_day['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
+# Attach all station types for display
+if not low_picker_per_day.empty:
+    station_types_per_user = (
+        filtered_data.groupby(['ShiftDate', 'Users'])['Station Type']
+        .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
+        .reset_index()
+        .rename(columns={'Users': 'Low Picker', 'Station Type': 'All Station Types'})
+    )
+    low_picker_per_day = low_picker_per_day.merge(
+        station_types_per_user,
+        left_on=['ShiftDate', 'Low Picker'],
+        right_on=['ShiftDate', 'Low Picker'],
+        how='left'
+    )
+    low_picker_per_day['ShiftDate'] = pd.to_datetime(low_picker_per_day['ShiftDate']).dt.strftime('%d-%m-%Y')
+    low_picker_per_day['Low Picker'] = turtle + low_picker_per_day['Low Picker'].astype(str)
+    low_picker_per_day['Total Carts Counted'] = low_picker_per_day['Total Carts Counted'].apply(
+        lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+    )
+
 
     st.subheader("Lowest Picker Per Day (All Hours, by ShiftDate)")
     st.dataframe(
