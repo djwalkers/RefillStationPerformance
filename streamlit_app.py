@@ -10,7 +10,11 @@ from datetime import datetime, timedelta
 import time
 import random
 
-# --- CONFIG ---
+# ---- EMOJIS ----
+trophy = "🏆 "
+turtle = "🐢 "
+
+# ---- CONFIG ----
 GITHUB_USER = "djwalkers"
 REPO_NAME = "RefillStationPerformance"
 DATA_FOLDER = "Data"
@@ -18,19 +22,6 @@ FILES_FOLDER = "Files"
 
 date_dim_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Date%20Dimension%20Table.xlsx"
 station_url = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/{FILES_FOLDER}/Station%20Standard.xlsx"
-
-# --- AUTO-REFRESH ---
-def auto_refresh(interval_sec=300):
-    if 'last_refresh' not in st.session_state:
-        st.session_state['last_refresh'] = time.time()
-        st.session_state['cachebuster'] = random.randint(0, int(1e8))
-    if time.time() - st.session_state['last_refresh'] > interval_sec:
-        st.session_state['last_refresh'] = time.time()
-        st.session_state['cachebuster'] = random.randint(0, int(1e8))
-        st.rerun()
-auto_refresh(300)
-if 'cachebuster' not in st.session_state:
-    st.session_state['cachebuster'] = random.randint(0, int(1e8))
 
 PRIMARY_COLOR = "#DA362C"
 BG_COLOR = "#DA362C"
@@ -41,6 +32,7 @@ BAR_EDGE = "#8B1A12"
 
 st.set_page_config(page_title="Refill Station Performance Dashboard", layout="wide")
 
+# ---- PAGE STYLE ----
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], .stApp {
@@ -61,6 +53,20 @@ logo_url = "https://raw.githubusercontent.com/djwalkers/RefillStationPerformance
 st.image(logo_url, width=180)
 st.title("Refill Station Performance Dashboard")
 
+# ---- AUTO-REFRESH ----
+def auto_refresh(interval_sec=300):
+    if 'last_refresh' not in st.session_state:
+        st.session_state['last_refresh'] = time.time()
+        st.session_state['cachebuster'] = random.randint(0, int(1e8))
+    if time.time() - st.session_state['last_refresh'] > interval_sec:
+        st.session_state['last_refresh'] = time.time()
+        st.session_state['cachebuster'] = random.randint(0, int(1e8))
+        st.rerun()
+auto_refresh(300)
+if 'cachebuster' not in st.session_state:
+    st.session_state['cachebuster'] = random.randint(0, int(1e8))
+
+# ---- NAVIGATION ----
 tab_labels = [
     "Hourly Dashboard", 
     "Weekly Dashboard",
@@ -70,7 +76,6 @@ tab_labels = [
 ]
 if "active_tab" not in st.session_state:
     st.session_state["active_tab"] = tab_labels[0]
-
 active_tab = st.selectbox(
     "Navigation",
     tab_labels,
@@ -79,11 +84,12 @@ active_tab = st.selectbox(
 )
 st.session_state["active_tab"] = active_tab
 
-# --- File upload to GitHub ---
+# ---- FILENAME VALIDATION ----
 def is_valid_filename(filename):
     pattern = r"^\d{2}-\d{2}-\d{4} \d{2}-\d{2}\.csv$"
     return bool(re.match(pattern, filename))
 
+# ---- GITHUB UPLOADER ----
 st.markdown("### Upload new data file to GitHub")
 uploaded_file = st.file_uploader(
     "Add a CSV file.",
@@ -92,11 +98,7 @@ uploaded_file = st.file_uploader(
 )
 if uploaded_file is not None:
     if not is_valid_filename(uploaded_file.name):
-        st.error(
-            "❌ **Filename must be in the format 'DD-MM-YYYY HH-MM.csv'** "
-            "(e.g., '14-02-2025 07-00.csv').\n\n"
-            "Please rename your file and try again."
-        )
+        st.error("❌ **Filename must be in the format 'DD-MM-YYYY HH-MM.csv'**")
         st.stop()
     else:
         try:
@@ -104,7 +106,9 @@ if uploaded_file is not None:
             repo = "djwalkers/RefillStationPerformance"
             branch = "main"
             upload_path = f"Data/{uploaded_file.name}"
+
             api_url = f"https://api.github.com/repos/{repo}/contents/{upload_path}"
+
             headers = {
                 "Authorization": f"Bearer {github_token}",
                 "Accept": "application/vnd.github.v3+json"
@@ -114,6 +118,7 @@ if uploaded_file is not None:
                 sha = r.json()["sha"]
             else:
                 sha = None
+
             content_base64 = base64.b64encode(uploaded_file.getvalue()).decode()
             payload = {
                 "message": f"Upload {uploaded_file.name} via Streamlit",
@@ -122,6 +127,7 @@ if uploaded_file is not None:
             }
             if sha:
                 payload["sha"] = sha
+
             put_response = requests.put(api_url, headers=headers, json=payload)
             if put_response.status_code in [200, 201]:
                 st.success(f"File '{uploaded_file.name}' uploaded to GitHub Data folder!")
@@ -133,7 +139,7 @@ if uploaded_file is not None:
         except Exception as ex:
             st.error(f"Uploader failed: {ex}")
 
-# --- Data Loading ---
+# ---- LOAD DATA ----
 @st.cache_data(show_spinner="Loading data")
 def load_raw_data(cachebuster=0):
     api_url = f"https://api.github.com/repos/{GITHUB_USER}/{REPO_NAME}/contents/{DATA_FOLDER}"
@@ -175,12 +181,11 @@ def load_reference_tables():
 
 raw_data = load_raw_data(st.session_state['cachebuster'])
 date_dim, station = load_reference_tables()
-
 if raw_data.empty:
     st.error("No data files found in the Data folder. Please check your GitHub repository.")
     st.stop()
 
-# --- Data Processing ---
+# ---- DATA PROCESSING ----
 data = raw_data.copy()
 data = data.rename(columns={
     'textBox9': 'Station Id',
@@ -196,7 +201,7 @@ drop_cols = [
 ]
 data = data.drop(columns=[c for c in drop_cols if c in data.columns], errors='ignore')
 
-# Parse Date and Time from filename
+# --- Parse Date and Time from filename
 data['Date'] = data['Source.Name'].str[:10]
 data['Date'] = pd.to_datetime(data['Date'], format='%d-%m-%Y', errors='coerce')
 def extract_time_from_filename(fname):
@@ -220,28 +225,6 @@ data = data[
     (data['Users'].astype(str).str.strip() != "0")
 ]
 
-# --- Shift Assignment Function (KEY) ---
-def assign_shift_and_shiftdate(row):
-    time_str = row['Time']
-    date = row['Date']
-    try:
-        hour, minute = map(int, str(time_str).split(":"))
-    except:
-        return pd.Series({"Shift": "Unknown", "ShiftDate": date})
-    total_minutes = hour * 60 + minute
-    if 6*60 <= total_minutes < 14*60:
-        return pd.Series({"Shift": "AM", "ShiftDate": date})
-    elif 14*60 <= total_minutes < 22*60:
-        return pd.Series({"Shift": "PM", "ShiftDate": date})
-    else:
-        # Night shift: 22:00-23:59 + 00:00-05:59 (should be previous day)
-        if 22*60 <= total_minutes <= 23*60+59:
-            shiftdate = date
-        else:  # 00:00–05:59
-            shiftdate = date - pd.Timedelta(days=1)
-        return pd.Series({"Shift": "Night", "ShiftDate": shiftdate})
-data[['Shift', 'ShiftDate']] = data.apply(assign_shift_and_shiftdate, axis=1)
-
 # Merge with Date Dimension
 if ('Date' in date_dim.columns) and all(x in date_dim.columns for x in ['Year', 'Month', 'Week']):
     data = data.merge(date_dim[['Date', 'Year', 'Month', 'Week']], on='Date', how='left')
@@ -255,6 +238,7 @@ data = data.rename(columns={
     'KPI': 'Station KPI'
 })
 
+# ---- Calculate Carts Counted Per Hour ----
 if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
     drawer_avg = pd.to_numeric(data['Drawer Avg'], errors='coerce').replace(0, pd.NA)
     data['Carts Counted Per Hour'] = (
@@ -264,26 +248,39 @@ if 'Drawers Counted' in data.columns and 'Drawer Avg' in data.columns:
 else:
     data['Carts Counted Per Hour'] = 0.0
 
-def get_current_week_and_month():
-    today = datetime.today()
-    week = today.isocalendar()[1]
-    month = today.strftime('%B')
-    return week, month
-current_week, current_month = get_current_week_and_month()
+# ---- SHIFT & SHIFTDATE LOGIC ----
+def assign_shift_and_shiftdate(row):
+    time_str = row['Time']
+    date_val = row['Date']
+    if pd.isna(time_str) or pd.isna(date_val):
+        return pd.Series({"Shift": "Unknown", "ShiftDate": date_val})
+    try:
+        hour, minute = map(int, str(time_str).split(":"))
+    except:
+        return pd.Series({"Shift": "Unknown", "ShiftDate": date_val})
+    t = hour * 60 + minute
+    if 6*60 <= t < 14*60:
+        shift = "AM"
+        shift_date = date_val
+    elif 14*60 <= t < 22*60:
+        shift = "PM"
+        shift_date = date_val
+    else:  # 22:00 - 23:59 or 00:00 - 05:59
+        shift = "Night"
+        # If hour is < 6, count toward PREVIOUS day
+        if t < 6*60:
+            shift_date = date_val - pd.Timedelta(days=1)
+        else:
+            shift_date = date_val
+    return pd.Series({"Shift": shift, "ShiftDate": shift_date})
 
-def clean_grouped_users(df, value_column):
-    temp = (
-        df.groupby("Users", as_index=False)[value_column]
-        .sum()
-    )
-    temp = temp[
-        (temp[value_column] > 0) &
-        (temp["Users"].astype(str).str.strip() != "") &
-        (temp["Users"].astype(str).str.strip() != "0")
-    ]
-    temp = temp.sort_values(value_column, ascending=False)
-    return temp
+shift_info = data.apply(assign_shift_and_shiftdate, axis=1)
+data = pd.concat([data, shift_info], axis=1)
 
+# For filters and grouping
+data['ShiftDate'] = pd.to_datetime(data['ShiftDate'])
+
+# ---- DASHBOARD CHART FUNCTION ----
 def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fontsize=11, default_top_n=20):
     if df.empty or x not in df.columns or y not in df.columns:
         st.info("No data to display for this selection.")
@@ -322,6 +319,7 @@ def show_bar_chart(df, x, y, title, figsize=(10, 5), label_fontsize=10, axis_fon
     plt.tight_layout()
     st.pyplot(fig)
 
+# ---- DASHBOARD TABS ----
 def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=False):
     filter_cols = []
     if month_filter and "Month" in df.columns:
@@ -337,17 +335,17 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
         if week_sel != "All":
             df = df[df["Week"].astype(str) == week_sel]
             filter_cols.append(f"Week={week_sel}")
-    if time_filters and "ShiftDate" in df.columns:
-        dates = df["ShiftDate"].dropna().unique()
+    if time_filters and "Date" in df.columns:
+        dates = df["Date"].dropna().unique()
         try:
             dates_dt = pd.to_datetime(dates)
             dates_fmt = [d.strftime('%d-%m-%Y') for d in sorted(dates_dt)]
         except Exception:
             dates_fmt = [str(d)[:10] for d in sorted(dates.tolist())]
-        date_sel = st.selectbox("Select ShiftDate (Reporting Day):", ["All"] + dates_fmt, key=f"{tag}_date")
+        date_sel = st.selectbox("Select Date:", ["All"] + dates_fmt, key=f"{tag}_date")
         if date_sel != "All":
-            df = df[df["ShiftDate"].dt.strftime('%d-%m-%Y') == date_sel]
-            filter_cols.append(f"ShiftDate={date_sel}")
+            df = df[df["Date"].dt.strftime('%d-%m-%Y') == date_sel]
+            filter_cols.append(f"Date={date_sel}")
     if time_filters and "Time" in df.columns:
         times = df["Time"].dropna().unique()
         times = sorted([str(t) for t in times if t is not None])
@@ -362,36 +360,11 @@ def dashboard_tab(df, tag, time_filters=True, week_filter=False, month_filter=Fa
         if station_sel != "All":
             df = df[df["Station Type"].astype(str) == station_sel]
             filter_cols.append(f"Station Type={station_sel}")
-
     st.write("**Filters applied:**", ", ".join(filter_cols) if filter_cols else "None")
-
-    titles = {
-        "main": "Carts Counted Per Hour",
-        "rogues": "Rogues Processed",
-        "drawers": "Damaged Drawers Processed",
-        "products": "Damaged Products Processed",
-    }
-
     show_bar_chart(
-        clean_grouped_users(df, "Carts Counted Per Hour"),
-        "Carts Counted Per Hour", "Users", titles["main"], figsize=(14, 6), label_fontsize=11, axis_fontsize=12
+        df.groupby('Users', as_index=False)["Carts Counted Per Hour"].sum(),
+        "Carts Counted Per Hour", "Users", "Carts Counted Per Hour", figsize=(14, 6), label_fontsize=11, axis_fontsize=12
     )
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        show_bar_chart(
-            clean_grouped_users(df, "Rogues Processed"),
-            "Rogues Processed", "Users", titles["rogues"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
-        )
-    with col2:
-        show_bar_chart(
-            clean_grouped_users(df, "Damaged Drawers Processed"),
-            "Damaged Drawers Processed", "Users", titles["drawers"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
-        )
-    with col3:
-        show_bar_chart(
-            clean_grouped_users(df, "Damaged Products Processed"),
-            "Damaged Products Processed", "Users", titles["products"], figsize=(6, 6), label_fontsize=9, axis_fontsize=10
-        )
 
 # --------- TABS IMPLEMENTATION ---------
 if active_tab == "Hourly Dashboard":
@@ -400,18 +373,20 @@ if active_tab == "Hourly Dashboard":
 
 elif active_tab == "Weekly Dashboard":
     st.header("Weekly Dashboard")
-    st.markdown(f"**Current Week Number:** {current_week}")
+    week = datetime.today().isocalendar()[1]
+    st.markdown(f"**Current Week Number:** {week}")
     dashboard_tab(data.copy(), "weekly", time_filters=False, week_filter=True, month_filter=False)
 
 elif active_tab == "Monthly Dashboard":
     st.header("Monthly Dashboard")
-    st.markdown(f"**Current Month:** {current_month}")
+    month = datetime.today().strftime('%B')
+    st.markdown(f"**Current Month:** {month}")
     dashboard_tab(data.copy(), "monthly", time_filters=False, week_filter=False, month_filter=True)
 
 elif active_tab == "High Performers":
     st.header("High Performers")
 
-    # ---- Month and Day Filters (use ShiftDate) ----
+    # ---- ShiftDate Filters ----
     month_options = sorted(data['ShiftDate'].dt.strftime('%B').dropna().unique())
     month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="high_month")
     filtered_data = data.copy()
@@ -419,49 +394,27 @@ elif active_tab == "High Performers":
         filtered_data = filtered_data[filtered_data['ShiftDate'].dt.strftime('%B') == month_sel]
 
     day_options = sorted(filtered_data['ShiftDate'].dt.strftime('%d-%m-%Y').dropna().unique())
-    day_sel = st.selectbox("Filter by ShiftDate:", ["All"] + day_options, key="high_day")
+    day_sel = st.selectbox("Filter by Day:", ["All"] + day_options, key="high_day")
     if day_sel != "All":
         filtered_data = filtered_data[filtered_data['ShiftDate'].dt.strftime('%d-%m-%Y') == day_sel]
 
-    trophy = "🏆 "
-
     # --- Top Picker Per Day (All Hours, by ShiftDate, SUM ACROSS STATION TYPES) ---
-user_day_total = (
-    filtered_data.groupby(['ShiftDate', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
-)
-idx = user_day_total.groupby('ShiftDate')['Carts Counted Per Hour'].idxmax()
-top_picker_per_day = user_day_total.loc[idx].reset_index(drop=True)
-top_picker_per_day = top_picker_per_day.rename(columns={
-    'Users': 'Top Picker',
-    'Carts Counted Per Hour': 'Total Carts Counted'
-})
-
-# Attach all station types for display
-if not top_picker_per_day.empty:
-    station_types_per_user = (
-        filtered_data.groupby(['ShiftDate', 'Users'])['Station Type']
-        .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
-        .reset_index()
-        .rename(columns={'Users': 'Top Picker', 'Station Type': 'All Station Types'})
+    user_day_total = (
+        filtered_data.groupby(['ShiftDate', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    top_picker_per_day = top_picker_per_day.merge(
-        station_types_per_user,
-        left_on=['ShiftDate', 'Top Picker'],
-        right_on=['ShiftDate', 'Top Picker'],
-        how='left'
-    )
+    user_day_total = user_day_total[user_day_total['Carts Counted Per Hour'] > 0]
+    idx = user_day_total.groupby('ShiftDate')['Carts Counted Per Hour'].idxmax()
+    top_picker_per_day = user_day_total.loc[idx].reset_index(drop=True)
     top_picker_per_day['ShiftDate'] = pd.to_datetime(top_picker_per_day['ShiftDate']).dt.strftime('%d-%m-%Y')
-    top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Top Picker'].astype(str)
-    top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Total Carts Counted'].apply(
+    top_picker_per_day['Top Picker'] = trophy + top_picker_per_day['Users'].astype(str)
+    top_picker_per_day['Total Carts Counted'] = top_picker_per_day['Carts Counted Per Hour'].apply(
         lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
     )
 
-
     st.subheader("Top Picker Per Day (All Hours, by ShiftDate)")
     st.dataframe(
-        top_picker_per_day[['ShiftDate', 'Top Picker', 'All Station Types', 'Total Carts Counted']],
-        use_container_width=True,
-        hide_index=True
+        top_picker_per_day[['ShiftDate', 'Top Picker', 'Total Carts Counted']],
+        use_container_width=True, hide_index=True
     )
 
     # --- Drilldown selection for picker details ---
@@ -498,90 +451,46 @@ if not top_picker_per_day.empty:
         else:
             st.info("No detailed records found for this picker on that day.")
 
-    # --- Top Picker Per Shift (Total Carts Counted) with Station Type ---
-    top_carts_shift = (
-        filtered_data.groupby(['ShiftDate', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+    # --- Top Picker Per Shift (by ShiftDate) ---
+    user_shift_total = (
+        filtered_data.groupby(['ShiftDate', 'Shift', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    idx_shift = top_carts_shift.groupby(['ShiftDate', 'Shift'])['Carts Counted Per Hour'].idxmax()
-    top_picker_per_shift = top_carts_shift.loc[idx_shift].reset_index(drop=True)
-    top_picker_per_shift = top_picker_per_shift.rename(columns={
-        'Users': 'Top Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
-    if not top_picker_per_shift.empty:
-        top_picker_per_shift['ShiftDate'] = pd.to_datetime(top_picker_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
-        top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Top Picker'].astype(str)
-        top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
-        shift_order = ['AM', 'PM', 'Night']
-        top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
-        top_picker_per_shift = top_picker_per_shift.sort_values(['ShiftDate', 'Shift'])
-        st.subheader("Top Picker Per Day (Shift Based, by ShiftDate)")
-        st.dataframe(
-            top_picker_per_shift[['ShiftDate', 'Shift', 'Top Picker', 'Station Type', 'Total Carts Counted']],
-            use_container_width=True,
-            hide_index=True
-        )
+    user_shift_total = user_shift_total[user_shift_total['Carts Counted Per Hour'] > 0]
+    idx_shift = user_shift_total.groupby(['ShiftDate', 'Shift'])['Carts Counted Per Hour'].idxmax()
+    top_picker_per_shift = user_shift_total.loc[idx_shift].reset_index(drop=True)
+    top_picker_per_shift['ShiftDate'] = pd.to_datetime(top_picker_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
+    top_picker_per_shift['Top Picker'] = trophy + top_picker_per_shift['Users'].astype(str)
+    top_picker_per_shift['Total Carts Counted'] = top_picker_per_shift['Carts Counted Per Hour'].apply(
+        lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+    )
+    shift_order = ['AM', 'PM', 'Night']
+    top_picker_per_shift['Shift'] = pd.Categorical(top_picker_per_shift['Shift'], categories=shift_order, ordered=True)
+    top_picker_per_shift = top_picker_per_shift.sort_values(['ShiftDate', 'Shift'])
+    st.subheader("Top Picker Per Shift (by ShiftDate)")
+    st.dataframe(
+        top_picker_per_shift[['ShiftDate', 'Shift', 'Top Picker', 'Total Carts Counted']],
+        use_container_width=True,
+        hide_index=True
+    )
 
-    # --- Total Carts Counted Per Shift (per day, by ShiftDate) ---
+    # --- Total Carts Counted Per Shift (by ShiftDate) ---
     carts_per_shift = (
         filtered_data.groupby(['ShiftDate', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
         .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
         .pivot(index='ShiftDate', columns='Shift', values='Carts Counted')
         .reset_index()
     )
-    for shift in ["AM", "PM", "Night"]:
+    for shift in ['AM', 'PM', 'Night']:
         if shift not in carts_per_shift.columns:
             carts_per_shift[shift] = 0
-    if not carts_per_shift.empty:
-        carts_per_shift['ShiftDate'] = pd.to_datetime(carts_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
-    st.subheader("Total Carts Counted Per Shift (per day, by ShiftDate)")
+    st.subheader("Total Carts Counted Per Shift (by ShiftDate)")
+    carts_per_shift['ShiftDate'] = pd.to_datetime(carts_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
     st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
-
-    # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags, by ShiftDate) ---
-    filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
-    exclude_types = ["Atlas Box & Bond Bags"]
-    exclude_types_lower = [t.lower() for t in exclude_types]
-    filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
-    filtered_data2 = filtered_data[
-        filtered_data['Station Type Lower'].notna() &
-        (filtered_data['Station Type Lower'] != 'nan') &
-        (~filtered_data['Station Type Lower'].isin(exclude_types_lower))
-    ]
-    breakdown = (
-        filtered_data2
-        .groupby(['Station Type', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
-        .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
-        .pivot(index='Station Type', columns='Shift', values='Carts Counted')
-        .reset_index()
-    )
-    for shift in ["AM", "PM", "Night"]:
-        if shift not in breakdown.columns:
-            breakdown[shift] = 0
-    st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags, by ShiftDate)")
-    st.dataframe(breakdown, use_container_width=True, hide_index=True)
-
-    # --- Bar chart: Top Users by Carts Counted (all by ShiftDate) ---
-    import matplotlib.pyplot as plt
-    high_users = (
-        filtered_data.groupby("Users", as_index=False)["Carts Counted Per Hour"].sum()
-        .sort_values("Carts Counted Per Hour", ascending=False).head(20)
-    )
-    st.subheader("Top 20 Users by Total Carts Counted (by ShiftDate)")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(high_users["Users"], high_users["Carts Counted Per Hour"], color='#DA362C')
-    ax.set_xlabel("Total Carts Counted")
-    ax.set_ylabel("User")
-    ax.set_title("Top 20 Users by Total Carts Counted (by ShiftDate)")
-    ax.invert_yaxis()
-    st.pyplot(fig)
-
 
 elif active_tab == "Low Performers":
     st.header("Low Performers")
 
-    # ---- Month and Day Filters (use ShiftDate) ----
+    # ---- ShiftDate Filters ----
     month_options = sorted(data['ShiftDate'].dt.strftime('%B').dropna().unique())
     month_sel = st.selectbox("Filter by Month:", ["All"] + month_options, key="low_month")
     filtered_data = data.copy()
@@ -589,50 +498,27 @@ elif active_tab == "Low Performers":
         filtered_data = filtered_data[filtered_data['ShiftDate'].dt.strftime('%B') == month_sel]
 
     day_options = sorted(filtered_data['ShiftDate'].dt.strftime('%d-%m-%Y').dropna().unique())
-    day_sel = st.selectbox("Filter by ShiftDate:", ["All"] + day_options, key="low_day")
+    day_sel = st.selectbox("Filter by Day:", ["All"] + day_options, key="low_day")
     if day_sel != "All":
         filtered_data = filtered_data[filtered_data['ShiftDate'].dt.strftime('%d-%m-%Y') == day_sel]
 
-    turtle = "🐢 "
-
-    # --- Lowest Picker Per Day (All Hours, by ShiftDate, SUM ACROSS STATION TYPES) ---
-user_day_total = (
-    filtered_data.groupby(['ShiftDate', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
-)
-user_day_total = user_day_total[user_day_total['Carts Counted Per Hour'] > 0]
-idx = user_day_total.groupby('ShiftDate')['Carts Counted Per Hour'].idxmin()
-low_picker_per_day = user_day_total.loc[idx].reset_index(drop=True)
-low_picker_per_day = low_picker_per_day.rename(columns={
-    'Users': 'Low Picker',
-    'Carts Counted Per Hour': 'Total Carts Counted'
-})
-
-# Attach all station types for display
-if not low_picker_per_day.empty:
-    station_types_per_user = (
-        filtered_data.groupby(['ShiftDate', 'Users'])['Station Type']
-        .apply(lambda sts: ', '.join(sorted(set(map(str, sts)))))
-        .reset_index()
-        .rename(columns={'Users': 'Low Picker', 'Station Type': 'All Station Types'})
+    # --- Low Picker Per Day (All Hours, by ShiftDate, SUM ACROSS STATION TYPES) ---
+    user_day_total = (
+        filtered_data.groupby(['ShiftDate', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    low_picker_per_day = low_picker_per_day.merge(
-        station_types_per_user,
-        left_on=['ShiftDate', 'Low Picker'],
-        right_on=['ShiftDate', 'Low Picker'],
-        how='left'
-    )
+    user_day_total = user_day_total[user_day_total['Carts Counted Per Hour'] > 0]
+    idx = user_day_total.groupby('ShiftDate')['Carts Counted Per Hour'].idxmin()
+    low_picker_per_day = user_day_total.loc[idx].reset_index(drop=True)
     low_picker_per_day['ShiftDate'] = pd.to_datetime(low_picker_per_day['ShiftDate']).dt.strftime('%d-%m-%Y')
-    low_picker_per_day['Low Picker'] = turtle + low_picker_per_day['Low Picker'].astype(str)
-    low_picker_per_day['Total Carts Counted'] = low_picker_per_day['Total Carts Counted'].apply(
+    low_picker_per_day['Low Picker'] = turtle + low_picker_per_day['Users'].astype(str)
+    low_picker_per_day['Total Carts Counted'] = low_picker_per_day['Carts Counted Per Hour'].apply(
         lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
     )
 
-
     st.subheader("Lowest Picker Per Day (All Hours, by ShiftDate)")
     st.dataframe(
-        low_picker_per_day[['ShiftDate', 'Low Picker', 'All Station Types', 'Total Carts Counted']],
-        use_container_width=True,
-        hide_index=True
+        low_picker_per_day[['ShiftDate', 'Low Picker', 'Total Carts Counted']],
+        use_container_width=True, hide_index=True
     )
 
     # --- Drilldown selection for picker details ---
@@ -669,82 +555,38 @@ if not low_picker_per_day.empty:
         else:
             st.info("No detailed records found for this picker on that day.")
 
-    # --- Low Picker Per Shift (Total Carts Counted) with Station Type ---
-    low_carts_shift = (
-        filtered_data.groupby(['ShiftDate', 'Shift', 'Users', 'Station Type'], as_index=False)['Carts Counted Per Hour'].sum()
+    # --- Lowest Picker Per Shift (by ShiftDate) ---
+    user_shift_total = (
+        filtered_data.groupby(['ShiftDate', 'Shift', 'Users'], as_index=False)['Carts Counted Per Hour'].sum()
     )
-    low_carts_shift = low_carts_shift[low_carts_shift['Carts Counted Per Hour'] > 0]
-    idx_shift = low_carts_shift.groupby(['ShiftDate', 'Shift'])['Carts Counted Per Hour'].idxmin()
-    low_picker_per_shift = low_carts_shift.loc[idx_shift].reset_index(drop=True)
-    low_picker_per_shift = low_picker_per_shift.rename(columns={
-        'Users': 'Low Picker',
-        'Carts Counted Per Hour': 'Total Carts Counted'
-    })
-    if not low_picker_per_shift.empty:
-        low_picker_per_shift['ShiftDate'] = pd.to_datetime(low_picker_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
-        low_picker_per_shift['Low Picker'] = turtle + low_picker_per_shift['Low Picker'].astype(str)
-        low_picker_per_shift['Total Carts Counted'] = low_picker_per_shift['Total Carts Counted'].apply(
-            lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
-        )
-        shift_order = ['AM', 'PM', 'Night']
-        low_picker_per_shift['Shift'] = pd.Categorical(low_picker_per_shift['Shift'], categories=shift_order, ordered=True)
-        low_picker_per_shift = low_picker_per_shift.sort_values(['ShiftDate', 'Shift'])
-        st.subheader("Lowest Picker Per Day (Shift Based, by ShiftDate)")
-        st.dataframe(
-            low_picker_per_shift[['ShiftDate', 'Shift', 'Low Picker', 'Station Type', 'Total Carts Counted']],
-            use_container_width=True,
-            hide_index=True
-        )
+    user_shift_total = user_shift_total[user_shift_total['Carts Counted Per Hour'] > 0]
+    idx_shift = user_shift_total.groupby(['ShiftDate', 'Shift'])['Carts Counted Per Hour'].idxmin()
+    low_picker_per_shift = user_shift_total.loc[idx_shift].reset_index(drop=True)
+    low_picker_per_shift['ShiftDate'] = pd.to_datetime(low_picker_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
+    low_picker_per_shift['Low Picker'] = turtle + low_picker_per_shift['Users'].astype(str)
+    low_picker_per_shift['Total Carts Counted'] = low_picker_per_shift['Carts Counted Per Hour'].apply(
+        lambda x: f"{x:.2f}" if 0 < x < 1 else f"{int(round(x))}"
+    )
+    shift_order = ['AM', 'PM', 'Night']
+    low_picker_per_shift['Shift'] = pd.Categorical(low_picker_per_shift['Shift'], categories=shift_order, ordered=True)
+    low_picker_per_shift = low_picker_per_shift.sort_values(['ShiftDate', 'Shift'])
+    st.subheader("Lowest Picker Per Shift (by ShiftDate)")
+    st.dataframe(
+        low_picker_per_shift[['ShiftDate', 'Shift', 'Low Picker', 'Total Carts Counted']],
+        use_container_width=True,
+        hide_index=True
+    )
 
-    # --- Total Carts Counted Per Shift (per day, by ShiftDate) ---
+    # --- Total Carts Counted Per Shift (by ShiftDate) ---
     carts_per_shift = (
         filtered_data.groupby(['ShiftDate', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
         .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
         .pivot(index='ShiftDate', columns='Shift', values='Carts Counted')
         .reset_index()
     )
-    for shift in ["AM", "PM", "Night"]:
+    for shift in ['AM', 'PM', 'Night']:
         if shift not in carts_per_shift.columns:
             carts_per_shift[shift] = 0
-    if not carts_per_shift.empty:
-        carts_per_shift['ShiftDate'] = pd.to_datetime(carts_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
-    st.subheader("Total Carts Counted Per Shift (per day, by ShiftDate)")
+    st.subheader("Total Carts Counted Per Shift (by ShiftDate)")
+    carts_per_shift['ShiftDate'] = pd.to_datetime(carts_per_shift['ShiftDate']).dt.strftime('%d-%m-%Y')
     st.dataframe(carts_per_shift, use_container_width=True, hide_index=True)
-
-    # --- Breakdown by Station Type and Shift (excluding Atlas Box & Bond Bags, by ShiftDate) ---
-    filtered_data['Station Type'] = filtered_data['Station Type'].astype(str).str.strip()
-    exclude_types = ["Atlas Box & Bond Bags"]
-    exclude_types_lower = [t.lower() for t in exclude_types]
-    filtered_data['Station Type Lower'] = filtered_data['Station Type'].str.lower()
-    filtered_data2 = filtered_data[
-        filtered_data['Station Type Lower'].notna() &
-        (filtered_data['Station Type Lower'] != 'nan') &
-        (~filtered_data['Station Type Lower'].isin(exclude_types_lower))
-    ]
-    breakdown = (
-        filtered_data2
-        .groupby(['Station Type', 'Shift'], as_index=False)['Carts Counted Per Hour'].sum()
-        .rename(columns={'Carts Counted Per Hour': 'Carts Counted'})
-        .pivot(index='Station Type', columns='Shift', values='Carts Counted')
-        .reset_index()
-    )
-    for shift in ["AM", "PM", "Night"]:
-        if shift not in breakdown.columns:
-            breakdown[shift] = 0
-    st.subheader("Carts Counted by Station Type & Shift (Excludes Atlas Box & Bond Bags, by ShiftDate)")
-    st.dataframe(breakdown, use_container_width=True, hide_index=True)
-
-    # --- Bar chart: Bottom 20 Users by Carts Counted (all by ShiftDate) ---
-    import matplotlib.pyplot as plt
-    low_users = (
-        filtered_data.groupby("Users", as_index=False)["Carts Counted Per Hour"].sum()
-        .sort_values("Carts Counted Per Hour", ascending=True).head(20)
-    )
-    st.subheader("Bottom 20 Users by Total Carts Counted (by ShiftDate)")
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(low_users["Users"], low_users["Carts Counted Per Hour"], color='#1a6bb2')
-    ax.set_xlabel("Total Carts Counted")
-    ax.set_ylabel("User")
-    ax.set_title("Bottom 20 Users by Total Carts Counted (by ShiftDate)")
-    ax.invert_yaxis()
-    st.pyplot(fig)
