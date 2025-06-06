@@ -88,7 +88,7 @@ def is_valid_filename(filename):
     return bool(re.match(pattern, filename))
 
 # ---- Automated File Uploader (GitHub API) ----
-st.markdown("### Upload new data file to GitHub")
+st.markdown("### Upload new data file")
 uploaded_file = st.file_uploader(
     "Add a CSV file.",
     type="csv",
